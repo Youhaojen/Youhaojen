@@ -4,7 +4,7 @@
 import os
 import re
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
 
 import requests
 
@@ -55,9 +55,7 @@ session.headers.update({
 # ============================================================
 
 def get_publications():
-    """
-    Get publications from Google Scholar author profile.
-    """
+    """Get publications from Google Scholar author profile."""
 
     api_key = os.environ.get("SERPAPI_KEY")
 
@@ -101,10 +99,7 @@ def get_publications():
 # ============================================================
 
 def get_citation_page(citation_id):
-    """
-    Get detailed Google Scholar citation information
-    for one publication.
-    """
+    """Get detailed information for one Scholar article."""
 
     api_key = os.environ.get("SERPAPI_KEY")
 
@@ -149,8 +144,7 @@ def get_citation_page(citation_id):
     except Exception as exc:
 
         print(
-            f"  Warning: citation lookup failed: "
-            f"{exc}",
+            f"  Warning: citation lookup failed: {exc}",
             flush=True,
         )
 
@@ -162,9 +156,7 @@ def get_citation_page(citation_id):
 # ============================================================
 
 def get_year(pub):
-    """
-    Return publication year as integer.
-    """
+    """Return publication year as integer."""
 
     try:
         return int(
@@ -179,9 +171,7 @@ def get_year(pub):
 
 
 def get_citations(pub):
-    """
-    Return citation count as integer.
-    """
+    """Return citation count as integer."""
 
     try:
 
@@ -209,9 +199,9 @@ def get_citations(pub):
 
 def clean_title(title):
     """
-    Clean common Google Scholar formatting problems.
+    Clean common Google Scholar chemical formula formatting.
 
-    No publication-specific title corrections are used here.
+    No paper-specific title correction is used.
     """
 
     title = " ".join(
@@ -219,10 +209,6 @@ def clean_title(title):
     )
 
     replacements = {
-
-        # ----------------------------------------------------
-        # Thermoelectric materials
-        # ----------------------------------------------------
 
         "PbSnS 2": "PbSnS₂",
         "PbSnS2": "PbSnS₂",
@@ -262,7 +248,6 @@ def clean_title(title):
 
         "Ca 2 GeO 4": "Ca₂GeO₄",
         "Ca2GeO4": "Ca₂GeO₄",
-
     }
 
     for old, new in replacements.items():
@@ -279,9 +264,7 @@ def clean_title(title):
 # ============================================================
 
 def is_conference(pub):
-    """
-    Detect conference / presentation records.
-    """
+    """Detect conference / presentation records."""
 
     title = str(
         pub.get(
@@ -309,7 +292,83 @@ def is_conference(pub):
 
 
 # ============================================================
-# DOI extraction
+# DOI validation
+# ============================================================
+
+DOI_PATTERN = re.compile(
+    r"^10\.\d{4,9}/\S+$",
+    re.IGNORECASE,
+)
+
+
+def normalize_doi(value):
+    """
+    Normalize a DOI candidate.
+
+    This function intentionally does NOT assume that every '/'
+    after the DOI prefix is invalid, because valid DOI suffixes
+    may contain slashes.
+    """
+
+    if not value:
+        return None
+
+    value = unquote(
+        str(value)
+    ).strip()
+
+    # Remove common DOI URL prefixes.
+    value = re.sub(
+        r"^https?://(?:dx\.)?doi\.org/",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+
+    value = re.sub(
+        r"^doi:\s*",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
+
+    # Remove whitespace.
+    value = value.strip()
+
+    # Remove trailing punctuation.
+    value = value.rstrip(
+        ".,;:)]}>\"'"
+    )
+
+    # Remove query string / fragment.
+    value = value.split(
+        "?",
+        1,
+    )[0]
+
+    value = value.split(
+        "#",
+        1,
+    )[0]
+
+    # DOI must start with 10.xxxx/
+    if not re.match(
+        r"^10\.\d{4,9}/",
+        value,
+        re.IGNORECASE,
+    ):
+        return None
+
+    if not DOI_PATTERN.match(
+        value
+    ):
+        return None
+
+    return value
+
+
+# ============================================================
+# DOI extraction from text
 # ============================================================
 
 DOI_REGEX = re.compile(
@@ -328,16 +387,14 @@ DOI_REGEX = re.compile(
 
 
 def extract_doi_from_text(text):
-    """
-    Extract a DOI from arbitrary text.
-    """
+    """Extract a DOI candidate from arbitrary text."""
 
     if not text:
         return None
 
     text = unquote(
         str(text)
-    ).strip()
+    )
 
     match = DOI_REGEX.search(
         text
@@ -346,31 +403,51 @@ def extract_doi_from_text(text):
     if not match:
         return None
 
-    doi = match.group(1)
+    candidate = match.group(1)
 
-    # --------------------------------------------------------
-    # Remove common trailing punctuation
-    # --------------------------------------------------------
-
-    doi = doi.rstrip(
-        ".,;:)]}>\"'"
+    return normalize_doi(
+        candidate
     )
 
-    # --------------------------------------------------------
-    # Remove URL query / fragment
-    # --------------------------------------------------------
 
-    doi = doi.split(
-        "?",
-        1,
-    )[0]
+# ============================================================
+# URL-specific DOI extraction
+# ============================================================
 
-    doi = doi.split(
-        "#",
-        1,
-    )[0]
+def extract_doi_from_url(url):
+    """
+    Extract DOI from a URL.
 
-    return doi
+    DOI URLs:
+        https://doi.org/10.xxxx/xxxxx
+
+    Publisher URLs are also inspected for embedded DOI.
+    """
+
+    if not url:
+        return None
+
+    url = unquote(
+        str(url)
+    ).strip()
+
+    # Direct DOI URL.
+    if "doi.org/" in url.lower():
+
+        part = re.split(
+            r"doi\.org/",
+            url,
+            flags=re.IGNORECASE,
+        )[1]
+
+        return normalize_doi(
+            part
+        )
+
+    # Search DOI anywhere inside URL.
+    return extract_doi_from_text(
+        url
+    )
 
 
 # ============================================================
@@ -381,8 +458,7 @@ def search_doi_in_object(obj):
     """
     Recursively search a SerpAPI response for a DOI.
 
-    The search is intentionally limited to values that
-    actually contain a DOI-like string.
+    DOI-related fields and URLs are checked first.
     """
 
     if isinstance(
@@ -399,30 +475,48 @@ def search_doi_in_object(obj):
         dict,
     ):
 
-        # Search DOI-related fields first.
+        # ----------------------------------------------------
+        # DOI-specific fields first
+        # ----------------------------------------------------
+
         preferred_keys = [
             "doi",
             "DOI",
-            "link",
+            "doi_url",
             "url",
+            "link",
             "resource",
-            "description",
-            "snippet",
-            "title",
         ]
 
         for key in preferred_keys:
 
-            if key in obj:
+            if key not in obj:
+                continue
 
-                doi = search_doi_in_object(
-                    obj[key]
+            value = obj[key]
+
+            if isinstance(
+                value,
+                str,
+            ):
+
+                doi = extract_doi_from_url(
+                    value
                 )
 
-                if doi:
-                    return doi
+            else:
 
-        # Search remaining fields.
+                doi = search_doi_in_object(
+                    value
+                )
+
+            if doi:
+                return doi
+
+        # ----------------------------------------------------
+        # Search all remaining values
+        # ----------------------------------------------------
+
         for key, value in obj.items():
 
             if key in preferred_keys:
@@ -458,7 +552,7 @@ def search_doi_in_object(obj):
 
 def get_doi(pub):
     """
-    Get DOI from the Google Scholar citation page.
+    Get DOI from Google Scholar citation page.
     """
 
     citation_id = pub.get(
@@ -488,11 +582,11 @@ def get_doi(pub):
 
 def format_publication(pub):
     """
-    Convert a publication into Markdown.
+    Format publication as Markdown.
 
-    IMPORTANT:
-    If DOI is unavailable, the title is NOT linked to
-    Google Scholar.
+    DOI is used when available.
+
+    Google Scholar is NEVER used as a fallback link.
     """
 
     raw_title = pub.get(
@@ -522,22 +616,18 @@ def format_publication(pub):
     )
 
     # --------------------------------------------------------
-    # DOI link
+    # Link
     # --------------------------------------------------------
 
     if doi:
 
-        link = (
-            f"https://doi.org/{doi}"
-        )
-
         title_text = (
-            f"[{title}]({link})"
+            f"[{title}]"
+            f"(https://doi.org/{doi})"
         )
 
     else:
 
-        # Do NOT fallback to Google Scholar.
         title_text = (
             f"**{title}**"
         )
@@ -549,7 +639,6 @@ def format_publication(pub):
     details = []
 
     if publication:
-
         details.append(
             publication
         )
@@ -574,9 +663,7 @@ def update_section(
     end_marker,
     publications,
 ):
-    """
-    Replace content between README markers.
-    """
+    """Replace README content between markers."""
 
     pattern = (
         re.escape(start_marker)
@@ -610,7 +697,7 @@ def update_section(
 def main():
 
     # --------------------------------------------------------
-    # Fetch Google Scholar
+    # Fetch Scholar publications
     # --------------------------------------------------------
 
     print(
@@ -626,7 +713,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Filter conference publications
+    # Remove conference records
     # --------------------------------------------------------
 
     journal_publications = []
@@ -646,8 +733,7 @@ def main():
         if is_conference(pub):
 
             print(
-                f"  Excluding conference: "
-                f"{title}",
+                f"  Excluding conference: {title}",
                 flush=True,
             )
 
@@ -664,7 +750,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Get DOI from Google Scholar
+    # Get DOI for every journal publication
     # --------------------------------------------------------
 
     print(
@@ -705,7 +791,7 @@ def main():
             )
 
     # --------------------------------------------------------
-    # Latest 3 journal publications
+    # Latest 3
     # --------------------------------------------------------
 
     latest = sorted(
@@ -715,7 +801,7 @@ def main():
     )[:3]
 
     # --------------------------------------------------------
-    # Most cited 3 journal publications
+    # Most Cited 3
     # --------------------------------------------------------
 
     most_cited = sorted(
@@ -725,32 +811,40 @@ def main():
     )[:3]
 
     # --------------------------------------------------------
-    # Show selected publications
+    # Debug output
     # --------------------------------------------------------
 
     print(
-        "\nLatest:",
+        "\n================ Latest ================",
         flush=True,
     )
 
     for pub in latest:
 
         print(
-            f"  {pub.get('title', '')}",
-            f"({pub.get('_doi') or 'NO DOI'})",
+            f"{pub.get('title', '')}",
+            flush=True,
+        )
+
+        print(
+            f"  DOI: {pub.get('_doi') or 'NOT FOUND'}",
             flush=True,
         )
 
     print(
-        "\nMost Cited:",
+        "\n================ Most Cited ================",
         flush=True,
     )
 
     for pub in most_cited:
 
         print(
-            f"  {pub.get('title', '')}",
-            f"({pub.get('_doi') or 'NO DOI'})",
+            f"{pub.get('title', '')}",
+            flush=True,
+        )
+
+        print(
+            f"  DOI: {pub.get('_doi') or 'NOT FOUND'}",
             flush=True,
         )
 
