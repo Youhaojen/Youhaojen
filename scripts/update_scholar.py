@@ -23,7 +23,7 @@ README = Path("README.md")
 SERPAPI_URL = "https://serpapi.com/search.json"
 CROSSREF_URL = "https://api.crossref.org/works"
 
-CROSSREF_TITLE_THRESHOLD = 0.88
+CROSSREF_TITLE_THRESHOLD = 0.70
 CROSSREF_DELAY = 0.2
 
 LATEST_N = 3
@@ -67,10 +67,6 @@ CONFERENCE_KEYWORDS = [
 
 
 def is_conference(pub):
-    """
-    Detect conference / symposium / workshop papers.
-    """
-
     text_parts = [
         pub.get("title", ""),
         pub.get("publication", ""),
@@ -86,7 +82,7 @@ def is_conference(pub):
 
 
 # ============================================================
-# Google Scholar
+# Google Scholar author search
 # ============================================================
 
 def get_publications():
@@ -127,59 +123,22 @@ def get_publications():
     return publications
 
 
-def get_citation_page(citation_id):
-    """
-    Retrieve Google Scholar citation page
-    through SerpAPI.
-    """
-
-    api_key = os.environ.get(
-        "SERPAPI_KEY"
-    )
-
-    if not api_key or not citation_id:
-        return {}
-
-    params = {
-        "engine": "google_scholar",
-        "view_op": "view_citation",
-        "citation_id": citation_id,
-        "hl": "en",
-        "api_key": api_key,
-    }
-
-    try:
-
-        response = session.get(
-            SERPAPI_URL,
-            params=params,
-            timeout=60,
-        )
-
-        response.raise_for_status()
-
-        return response.json()
-
-    except Exception as exc:
-
-        print(
-            f"  Scholar citation page failed: "
-            f"{type(exc).__name__}: {exc}"
-        )
-
-        return {}
-
-
 # ============================================================
 # Basic publication information
 # ============================================================
 
 def get_year(pub):
-    year = pub.get("year")
-
     try:
-        return int(year)
-    except (TypeError, ValueError):
+        return int(
+            pub.get(
+                "year",
+                0
+            )
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
         return 0
 
 
@@ -191,7 +150,7 @@ def get_citations(pub):
 
     if isinstance(
         cited_by,
-        dict
+        dict,
     ):
         value = cited_by.get(
             "value",
@@ -202,38 +161,23 @@ def get_citations(pub):
 
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (
+        TypeError,
+        ValueError,
+    ):
         return 0
 
 
 # ============================================================
-# MathML / XML cleanup
+# MathML cleanup
 # ============================================================
 
 def clean_mathml(title):
-    """
-    Convert common MathML/XML fragments
-    into normal readable text.
-
-    Example:
-
-        <mml:msub>
-            <mml:mi>h</mml:mi>
-            <mml:mn>2</mml:mn>
-        </mml:msub>
-
-    becomes:
-
-        h₂
-    """
 
     if not title:
         return title
 
-    # --------------------------------------------------------
-    # Decode common HTML entities
-    # --------------------------------------------------------
-
+    # HTML entities
     title = title.replace(
         "&lt;",
         "<"
@@ -259,10 +203,6 @@ def clean_mathml(title):
         "&"
     )
 
-    # --------------------------------------------------------
-    # Subscript / superscript tables
-    # --------------------------------------------------------
-
     subscript_table = str.maketrans(
         "0123456789",
         "₀₁₂₃₄₅₆₇₈₉"
@@ -274,10 +214,7 @@ def clean_mathml(title):
     )
 
     # --------------------------------------------------------
-    # MathML msub
-    #
-    # <msub><mi>h</mi><mn>2</mn></msub>
-    # -> h₂
+    # msub
     # --------------------------------------------------------
 
     title = re.sub(
@@ -287,21 +224,17 @@ def clean_mathml(title):
         r"<(?:mml:)?mn[^>]*>\s*(.*?)\s*"
         r"</(?:mml:)?mn>\s*"
         r"</(?:mml:)?msub>",
-        lambda m: (
+        lambda m:
             m.group(1).strip()
             + m.group(2).strip().translate(
                 subscript_table
-            )
-        ),
+            ),
         title,
         flags=re.IGNORECASE | re.DOTALL,
     )
 
     # --------------------------------------------------------
-    # MathML msup
-    #
-    # <msup><mi>x</mi><mn>2</mn></msup>
-    # -> x²
+    # msup
     # --------------------------------------------------------
 
     title = re.sub(
@@ -311,18 +244,17 @@ def clean_mathml(title):
         r"<(?:mml:)?mn[^>]*>\s*(.*?)\s*"
         r"</(?:mml:)?mn>\s*"
         r"</(?:mml:)?msup>",
-        lambda m: (
+        lambda m:
             m.group(1).strip()
             + m.group(2).strip().translate(
                 superscript_table
-            )
-        ),
+            ),
         title,
         flags=re.IGNORECASE | re.DOTALL,
     )
 
     # --------------------------------------------------------
-    # Remove remaining XML / MathML tags
+    # Remove XML tags
     # --------------------------------------------------------
 
     title = re.sub(
@@ -333,7 +265,7 @@ def clean_mathml(title):
     )
 
     # --------------------------------------------------------
-    # Remove escaped MathML namespace
+    # Remove escaped namespace
     # --------------------------------------------------------
 
     title = re.sub(
@@ -363,22 +295,14 @@ def clean_mathml(title):
 
     title = re.sub(
         r"\b(?:"
-        r"math|"
-        r"mrow|"
-        r"mi|"
-        r"mo|"
-        r"mn|"
-        r"msub|"
-        r"msup|"
-        r"mfrac|"
-        r"mtext"
+        r"math|mrow|mi|mo|mn|"
+        r"msub|msup|mfrac|mtext"
         r")\b",
         "",
         title,
         flags=re.IGNORECASE,
     )
 
-    # Remove stray backslashes
     title = title.replace(
         "\\",
         ""
@@ -388,121 +312,36 @@ def clean_mathml(title):
 
 
 # ============================================================
-# Title normalization
-# ============================================================
-
-def normalize_title(title):
-    """
-    Normalize title for similarity comparison.
-    """
-
-    if not title:
-        return ""
-
-    title = clean_mathml(
-        title
-    )
-
-    title = unicodedata.normalize(
-        "NFKC",
-        title
-    )
-
-    subscript_map = str.maketrans(
-        "₀₁₂₃₄₅₆₇₈₉",
-        "0123456789"
-    )
-
-    superscript_map = str.maketrans(
-        "⁰¹²³⁴⁵⁶⁷⁸⁹",
-        "0123456789"
-    )
-
-    title = title.translate(
-        subscript_map
-    )
-
-    title = title.translate(
-        superscript_map
-    )
-
-    title = re.sub(
-        r"[^a-zA-Z0-9]+",
-        " ",
-        title,
-    )
-
-    title = title.lower()
-
-    title = re.sub(
-        r"\s+",
-        " ",
-        title,
-    )
-
-    return title.strip()
-
-
-def title_similarity(title1, title2):
-    a = normalize_title(
-        title1
-    )
-
-    b = normalize_title(
-        title2
-    )
-
-    if not a or not b:
-        return 0.0
-
-    return SequenceMatcher(
-        None,
-        a,
-        b,
-    ).ratio()
-
-
-# ============================================================
-# Display title cleanup
+# Title cleanup
 # ============================================================
 
 def clean_title(title):
+
     if not title:
         return title
-
-    # --------------------------------------------------------
-    # MathML / XML
-    # --------------------------------------------------------
 
     title = clean_mathml(
         title
     )
-
-    # --------------------------------------------------------
-    # Unicode normalization
-    # --------------------------------------------------------
 
     title = unicodedata.normalize(
         "NFKC",
         title
     )
 
-    # Remove invisible Unicode characters
+    # Remove invisible characters
     title = re.sub(
         r"[\u200b-\u200f\u202a-\u202e\u2060-\u206f]",
         "",
         title,
     )
 
-    # --------------------------------------------------------
-    # Chemical formula subscripts
-    # --------------------------------------------------------
-
     sub_map = str.maketrans(
         "0123456789",
         "₀₁₂₃₄₅₆₇₈₉"
     )
 
+    # Common chemical formulas
     formulas = [
         "PbSnS2",
         "Ag3XS3",
@@ -523,12 +362,11 @@ def clean_title(title):
 
         converted = re.sub(
             r"([A-Za-z]+)(\d+)",
-            lambda m: (
+            lambda m:
                 m.group(1)
                 + m.group(2).translate(
                     sub_map
-                )
-            ),
+                ),
             formula,
         )
 
@@ -537,28 +375,16 @@ def clean_title(title):
             converted,
         )
 
-    # --------------------------------------------------------
-    # Generic spacing before chemical subscripts
-    #
-    # Example:
     # PbSnS 2 -> PbSnS₂
-    # --------------------------------------------------------
-
     title = re.sub(
-        r"\b(PbSnS|Ag3XS|K2Se2Te|Sr2Si|"
-        r"Sr2Ge|Ag2Se)\s+([0-9])\b",
-        lambda m: (
+        r"\b(PbSnS)\s+([0-9])\b",
+        lambda m:
             m.group(1)
             + m.group(2).translate(
                 sub_map
-            )
-        ),
+            ),
         title,
     )
-
-    # --------------------------------------------------------
-    # Normalize whitespace
-    # --------------------------------------------------------
 
     title = re.sub(
         r"\s+",
@@ -566,14 +392,12 @@ def clean_title(title):
         title,
     )
 
-    # Remove spaces before punctuation
     title = re.sub(
         r"\s+([,;:)])",
         r"\1",
         title,
     )
 
-    # Remove spaces after "("
     title = re.sub(
         r"\(\s+",
         "(",
@@ -581,6 +405,81 @@ def clean_title(title):
     )
 
     return title.strip()
+
+
+# ============================================================
+# Title normalization
+# ============================================================
+
+def normalize_title(title):
+
+    if not title:
+        return ""
+
+    title = clean_mathml(
+        title
+    )
+
+    title = unicodedata.normalize(
+        "NFKC",
+        title
+    )
+
+    sub_map = str.maketrans(
+        "₀₁₂₃₄₅₆₇₈₉",
+        "0123456789"
+    )
+
+    super_map = str.maketrans(
+        "⁰¹²³⁴⁵⁶⁷⁸⁹",
+        "0123456789"
+    )
+
+    title = title.translate(
+        sub_map
+    )
+
+    title = title.translate(
+        super_map
+    )
+
+    title = re.sub(
+        r"[^a-zA-Z0-9]+",
+        " ",
+        title,
+    )
+
+    title = title.lower()
+
+    title = re.sub(
+        r"\s+",
+        " ",
+        title,
+    )
+
+    return title.strip()
+
+
+def title_similarity(
+    title1,
+    title2,
+):
+    a = normalize_title(
+        title1
+    )
+
+    b = normalize_title(
+        title2
+    )
+
+    if not a or not b:
+        return 0.0
+
+    return SequenceMatcher(
+        None,
+        a,
+        b,
+    ).ratio()
 
 
 # ============================================================
@@ -603,13 +502,6 @@ DOI_REGEX = re.compile(
 
 
 def normalize_doi(value):
-    """
-    Normalize DOI.
-
-    Important:
-    Do NOT remove arbitrary DOI suffixes here.
-    Canonical DOI verification is handled by Crossref.
-    """
 
     if not value:
         return None
@@ -663,6 +555,7 @@ def normalize_doi(value):
 
 
 def extract_doi_from_text(text):
+
     if not text:
         return None
 
@@ -679,14 +572,10 @@ def extract_doi_from_text(text):
 
 
 # ============================================================
-# Recursive DOI search
+# Recursive DOI extraction
 # ============================================================
 
 def search_doi_in_object(obj):
-    """
-    Recursively search SerpAPI JSON
-    for DOI-related fields.
-    """
 
     preferred_keys = {
         "doi",
@@ -702,7 +591,7 @@ def search_doi_in_object(obj):
         dict,
     ):
 
-        # Search DOI-related fields first
+        # First search DOI-related fields
         for key, value in obj.items():
 
             if key in preferred_keys:
@@ -719,7 +608,7 @@ def search_doi_in_object(obj):
                     if doi:
                         return doi
 
-        # Search nested objects
+        # Then recurse
         for value in obj.values():
 
             doi = search_doi_in_object(
@@ -756,109 +645,16 @@ def search_doi_in_object(obj):
 
 
 # ============================================================
-# Scholar author handling
-# ============================================================
-
-def get_scholar_authors(pub):
-
-    authors = pub.get(
-        "authors",
-        []
-    )
-
-    if isinstance(
-        authors,
-        str,
-    ):
-        authors = [authors]
-
-    result = []
-
-    for author in authors:
-
-        if isinstance(
-            author,
-            dict,
-        ):
-            name = author.get(
-                "name",
-                ""
-            )
-        else:
-            name = str(author)
-
-        name = name.strip()
-
-        if not name:
-            continue
-
-        surname = name.split()[-1]
-
-        result.append(
-            surname.lower()
-        )
-
-    return result
-
-
-def crossref_author_match(
-    pub,
-    metadata,
-):
-    """
-    Compare Scholar first author
-    with Crossref first author.
-    """
-
-    scholar_authors = get_scholar_authors(
-        pub
-    )
-
-    if not scholar_authors:
-        return True
-
-    scholar_first = scholar_authors[0]
-
-    authors = metadata.get(
-        "author",
-        []
-    )
-
-    if not authors:
-        return True
-
-    first_author = authors[0]
-
-    family = first_author.get(
-        "family",
-        ""
-    ).lower()
-
-    if not family:
-        return True
-
-    return (
-        scholar_first == family
-        or scholar_first in family
-        or family in scholar_first
-    )
-
-
-# ============================================================
 # Crossref metadata
 # ============================================================
 
 def get_crossref_metadata(doi):
-    """
-    Retrieve Crossref metadata for a DOI.
-
-    Important:
-    The slash in the DOI is preserved.
-    """
 
     if not doi:
         return None
 
+    # IMPORTANT:
+    # Keep "/" unescaped in DOI path.
     url = (
         CROSSREF_URL
         + "/"
@@ -877,12 +673,6 @@ def get_crossref_metadata(doi):
 
         if response.status_code != 200:
 
-            print(
-                f"  Crossref metadata failed "
-                f"({response.status_code}): "
-                f"{doi}"
-            )
-
             return None
 
         data = response.json()
@@ -891,12 +681,7 @@ def get_crossref_metadata(doi):
             "message"
         )
 
-    except Exception as exc:
-
-        print(
-            f"  Crossref metadata error: "
-            f"{type(exc).__name__}: {exc}"
-        )
+    except Exception:
 
         return None
 
@@ -906,14 +691,6 @@ def get_crossref_metadata(doi):
 # ============================================================
 
 def search_crossref(pub):
-    """
-    Search Crossref by title.
-
-    Validation:
-      - title similarity
-      - publication year
-      - first author
-    """
 
     title = pub.get(
         "title",
@@ -927,8 +704,13 @@ def search_crossref(pub):
         pub
     )
 
+    # Use cleaned title for Crossref query
+    query_title = clean_title(
+        title
+    )
+
     params = {
-        "query.title": title,
+        "query.title": query_title,
         "rows": 10,
         "select": (
             "DOI,title,author,"
@@ -981,15 +763,15 @@ def search_crossref(pub):
         if not doi:
             continue
 
-        crossref_titles = item.get(
+        titles = item.get(
             "title",
             []
         )
 
-        if not crossref_titles:
+        if not titles:
             continue
 
-        crossref_title = crossref_titles[0]
+        crossref_title = titles[0]
 
         similarity = title_similarity(
             title,
@@ -1000,7 +782,7 @@ def search_crossref(pub):
             continue
 
         # ----------------------------------------------------
-        # Year check
+        # Year
         # ----------------------------------------------------
 
         crossref_year = None
@@ -1038,16 +820,6 @@ def search_crossref(pub):
         ):
             continue
 
-        # ----------------------------------------------------
-        # Author check
-        # ----------------------------------------------------
-
-        if not crossref_author_match(
-            pub,
-            item,
-        ):
-            continue
-
         candidate = {
             "doi": doi,
             "title": crossref_title,
@@ -1059,6 +831,7 @@ def search_crossref(pub):
             best is None
             or similarity > best["similarity"]
         ):
+
             best = candidate
 
     if best:
@@ -1080,26 +853,10 @@ def search_crossref(pub):
 
 
 # ============================================================
-# DOI resolution
+# DOI lookup
 # ============================================================
 
 def get_doi(pub):
-    """
-    DOI resolution:
-
-    1. Google Scholar citation page
-    2. Validate Scholar DOI through Crossref
-    3. Crossref title search
-
-    This automatically fixes malformed DOI
-    candidates such as:
-
-        10.1039/d6ta01797e/1267418
-
-    if Crossref identifies the canonical DOI as:
-
-        10.1039/d6ta01797e
-    """
 
     title = pub.get(
         "title",
@@ -1112,37 +869,30 @@ def get_doi(pub):
     )
 
     # --------------------------------------------------------
-    # 1. Google Scholar
+    # IMPORTANT:
+    #
+    # Do NOT call view_citation.
+    #
+    # The citation_id returned by the author engine is not
+    # reliable with the current SerpAPI configuration.
+    #
+    # Instead, search the article object itself.
     # --------------------------------------------------------
 
-    citation_id = pub.get(
-        "citation_id"
+    scholar_doi = search_doi_in_object(
+        pub
     )
 
-    scholar_doi = None
-
-    if citation_id:
-
-        citation_data = get_citation_page(
-            citation_id
-        )
-
-        scholar_doi = search_doi_in_object(
-            citation_data
-        )
-
-        if scholar_doi:
-
-            print(
-                f"  Scholar DOI candidate: "
-                f"{scholar_doi}"
-            )
-
-    # --------------------------------------------------------
-    # 2. Verify Scholar DOI through Crossref
-    # --------------------------------------------------------
-
     if scholar_doi:
+
+        print(
+            f"  Scholar article DOI: "
+            f"{scholar_doi}"
+        )
+
+        # ----------------------------------------------------
+        # Verify DOI through Crossref
+        # ----------------------------------------------------
 
         metadata = get_crossref_metadata(
             scholar_doi
@@ -1159,19 +909,27 @@ def get_doi(pub):
             if canonical_doi:
 
                 print(
-                    f"  Crossref verified DOI: "
+                    f"  Canonical DOI: "
                     f"{canonical_doi}"
                 )
 
                 return canonical_doi
 
+        else:
+
+            print(
+                "  Scholar DOI could not be "
+                "verified by Crossref."
+            )
+
+    else:
+
         print(
-            "  Scholar DOI could not be "
-            "verified by Crossref."
+            "  No DOI found in Scholar article."
         )
 
     # --------------------------------------------------------
-    # 3. Crossref title search
+    # Crossref fallback
     # --------------------------------------------------------
 
     result = search_crossref(
@@ -1210,13 +968,6 @@ def get_best_title(
     pub,
     doi,
 ):
-    """
-    Select the best title.
-
-    Crossref title is preferred when:
-      - similarity is sufficiently high
-      - Scholar title contains MathML/XML corruption
-    """
 
     scholar_title = pub.get(
         "title",
@@ -1227,90 +978,63 @@ def get_best_title(
         return scholar_title
 
     # --------------------------------------------------------
-    # No DOI
+    # Crossref title
     # --------------------------------------------------------
 
-    if not doi:
+    if doi:
 
-        return clean_title(
-            scholar_title
+        metadata = get_crossref_metadata(
+            doi
         )
 
-    # --------------------------------------------------------
-    # Crossref metadata
-    # --------------------------------------------------------
+        if metadata:
 
-    metadata = get_crossref_metadata(
-        doi
-    )
+            titles = metadata.get(
+                "title",
+                []
+            )
 
-    if not metadata:
+            if titles:
 
-        return clean_title(
-            scholar_title
-        )
+                crossref_title = titles[0]
 
-    crossref_titles = metadata.get(
-        "title",
-        []
-    )
+                similarity = title_similarity(
+                    scholar_title,
+                    crossref_title,
+                )
 
-    if not crossref_titles:
+                malformed = any(
+                    re.search(
+                        pattern,
+                        scholar_title,
+                        flags=re.IGNORECASE,
+                    )
+                    for pattern in [
+                        r"<mml:",
+                        r"</mml:",
+                        r"mml\\:",
+                        r"xmlns:mml",
+                        r"xmlns\\:mml",
+                        r"<math",
+                        r"</math",
+                        r"\bmml:math\b",
+                        r"\bmml:mrow\b",
+                        r"\bmml:mi\b",
+                        r"\bmml:msub\b",
+                    ]
+                )
 
-        return clean_title(
-            scholar_title
-        )
+                if (
+                    similarity >= 0.60
+                    or malformed
+                ):
 
-    crossref_title = crossref_titles[0]
-
-    similarity = title_similarity(
-        scholar_title,
-        crossref_title,
-    )
-
-    # --------------------------------------------------------
-    # Crossref title is sufficiently similar
-    # --------------------------------------------------------
-
-    if similarity >= 0.60:
-
-        return clean_title(
-            crossref_title
-        )
-
-    # --------------------------------------------------------
-    # Scholar title contains MathML/XML corruption
-    # --------------------------------------------------------
-
-    malformed_patterns = [
-        r"<mml:",
-        r"</mml:",
-        r"mml\\:",
-        r"xmlns:mml",
-        r"xmlns\\:mml",
-        r"<math",
-        r"</math",
-        r"\bmml:math\b",
-        r"\bmml:mrow\b",
-        r"\bmml:mi\b",
-        r"\bmml:msub\b",
-    ]
-
-    if any(
-        re.search(
-            pattern,
-            scholar_title,
-            flags=re.IGNORECASE,
-        )
-        for pattern in malformed_patterns
-    ):
-
-        return clean_title(
-            crossref_title
-        )
+                    return clean_title(
+                        crossref_title
+                    )
 
     # --------------------------------------------------------
-    # Otherwise use Scholar title
+    # Scholar title
     # --------------------------------------------------------
 
     return clean_title(
@@ -1319,7 +1043,7 @@ def get_best_title(
 
 
 # ============================================================
-# Markdown formatting
+# Markdown
 # ============================================================
 
 def format_publication(pub):
@@ -1347,7 +1071,7 @@ def format_publication(pub):
     ).strip()
 
     # --------------------------------------------------------
-    # Title
+    # DOI link
     # --------------------------------------------------------
 
     if doi:
@@ -1359,13 +1083,12 @@ def format_publication(pub):
 
     else:
 
-        # No Google Scholar fallback
         title_text = (
             f"**{title}**"
         )
 
     # --------------------------------------------------------
-    # Publication metadata
+    # Metadata
     # --------------------------------------------------------
 
     metadata = []
@@ -1395,7 +1118,7 @@ def format_publication(pub):
 
 
 # ============================================================
-# README section update
+# README update
 # ============================================================
 
 def update_section(
@@ -1449,10 +1172,6 @@ def update_section(
 
 def main():
 
-    # --------------------------------------------------------
-    # README
-    # --------------------------------------------------------
-
     if not README.exists():
 
         raise FileNotFoundError(
@@ -1464,7 +1183,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Google Scholar
+    # Scholar
     # --------------------------------------------------------
 
     publications = get_publications()
@@ -1502,7 +1221,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # DOI resolution
+    # DOI
     # --------------------------------------------------------
 
     for pub in journal_publications:
@@ -1570,7 +1289,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Update README
+    # README
     # --------------------------------------------------------
 
     readme_text = update_section(
