@@ -97,7 +97,7 @@ def main():
     # Most cited 3
     most_cited = sorted(
         publications,
-        key=lambda x: x.get("cited_by", {}).get("value", 0),
+        key=lambda x: x.get("cited_by", {}).get("value") or 0,
         reverse=True,
     )[:3]
 
