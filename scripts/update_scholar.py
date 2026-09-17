@@ -29,6 +29,16 @@ CROSSREF_DELAY = 0.2
 LATEST_N = 3
 MOST_CITED_N = 3
 
+SUBSCRIPT_DIGITS = str.maketrans(
+    "0123456789",
+    "₀₁₂₃₄₅₆₇₈₉"
+)
+
+SUPERSCRIPT_DIGITS = str.maketrans(
+    "0123456789",
+    "⁰¹²³⁴⁵⁶⁷⁸⁹"
+)
+
 
 # ============================================================
 # HTTP session
@@ -214,41 +224,73 @@ def clean_mathml(title):
     )
 
     # --------------------------------------------------------
-    # msub
+    # msub / msup (generalized)
+    #
+    # Rather than requiring the exact two-child pattern
+    # <mi>base</mi><mn>number</mn>, strip whatever tags are
+    # nested inside <msub>/<msup> and treat the trailing run
+    # of digits as the subscript/superscript number. This
+    # also handles a grouped base such as <mrow>(Ag,Cu)</mrow>.
     # --------------------------------------------------------
 
+    def _mathml_script(match, digit_table):
+
+        inner = re.sub(
+            r"<[^>]+>",
+            "",
+            match.group(1),
+            flags=re.DOTALL,
+        ).strip()
+
+        digit_match = re.search(
+            r"(\d+)\s*$",
+            inner,
+        )
+
+        if not digit_match:
+            return inner
+
+        base = inner[:digit_match.start()].strip()
+
+        return base + digit_match.group(1).translate(
+            digit_table
+        )
+
     title = re.sub(
-        r"<(?:mml:)?msub>\s*"
-        r"<(?:mml:)?mi[^>]*>\s*(.*?)\s*"
-        r"</(?:mml:)?mi>\s*"
-        r"<(?:mml:)?mn[^>]*>\s*(.*?)\s*"
-        r"</(?:mml:)?mn>\s*"
-        r"</(?:mml:)?msub>",
-        lambda m:
-            m.group(1).strip()
-            + m.group(2).strip().translate(
-                subscript_table
-            ),
+        r"<(?:mml:)?msub>\s*(.*?)\s*</(?:mml:)?msub>",
+        lambda m: _mathml_script(m, subscript_table),
+        title,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    title = re.sub(
+        r"<(?:mml:)?msup>\s*(.*?)\s*</(?:mml:)?msup>",
+        lambda m: _mathml_script(m, superscript_table),
         title,
         flags=re.IGNORECASE | re.DOTALL,
     )
 
     # --------------------------------------------------------
-    # msup
+    # Plain HTML <sub>/<sup> tags
+    #
+    # Crossref titles commonly carry simple HTML-style
+    # subscript/superscript tags (e.g. "Sr<sub>2</sub>Si")
+    # rather than full presentation MathML. These were
+    # previously left for the generic tag stripper below,
+    # which dropped the tags but left the digits as plain
+    # text (no subscript conversion).
     # --------------------------------------------------------
 
     title = re.sub(
-        r"<(?:mml:)?msup>\s*"
-        r"<(?:mml:)?mi[^>]*>\s*(.*?)\s*"
-        r"</(?:mml:)?mi>\s*"
-        r"<(?:mml:)?mn[^>]*>\s*(.*?)\s*"
-        r"</(?:mml:)?mn>\s*"
-        r"</(?:mml:)?msup>",
-        lambda m:
-            m.group(1).strip()
-            + m.group(2).strip().translate(
-                superscript_table
-            ),
+        r"<sub>(.*?)</sub>",
+        lambda m: m.group(1).translate(subscript_table),
+        title,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    title = re.sub(
+        r"<sup>(.*?)</sup>",
+        lambda m: m.group(1).translate(superscript_table),
         title,
         flags=re.IGNORECASE | re.DOTALL,
     )
@@ -290,18 +332,18 @@ def clean_mathml(title):
     )
 
     # --------------------------------------------------------
-    # Remove remaining MathML element names
+    # NOTE: an earlier version of this function also removed
+    # any standalone occurrence of the words "math", "mrow",
+    # "mi", "mo", "mn", "msub", "msup", "mfrac", "mtext"
+    # anywhere in the title, to mop up leftover MathML element
+    # names. That regex has no way to tell a leftover tag name
+    # apart from a real word/element symbol that happens to
+    # match one of those tokens -- in particular it silently
+    # deleted the chemical symbols "Mo" (molybdenum) and "Mn"
+    # (manganese) whenever they appeared on their own. The tag
+    # stripper above already removes actual tags, so this
+    # extra step was removed rather than made "smarter".
     # --------------------------------------------------------
-
-    title = re.sub(
-        r"\b(?:"
-        r"math|mrow|mi|mo|mn|"
-        r"msub|msup|mfrac|mtext"
-        r")\b",
-        "",
-        title,
-        flags=re.IGNORECASE,
-    )
 
     title = title.replace(
         "\\",
@@ -336,53 +378,62 @@ def clean_title(title):
         title,
     )
 
-    sub_map = str.maketrans(
-        "0123456789",
-        "₀₁₂₃₄₅₆₇₈₉"
-    )
+    sub_map = SUBSCRIPT_DIGITS
 
-    # Common chemical formulas
-    formulas = [
-        "PbSnS2",
-        "Ag3XS3",
-        "K2Se2Te",
-        "Sr2Si",
-        "Sr2Ge",
-        "Ag2Se",
-        "CsCuCl3",
-        "CsCuBr3",
-        "K3SbS4",
-        "K3SbTe3",
-        "K3BiTe3",
-        "Mg2GeO4",
-        "Ca2GeO4",
-    ]
+    # --------------------------------------------------------
+    # Chemical-formula subscripting (general rule, not a
+    # hand-maintained list of known formulas)
+    #
+    # A "formula run" here is two or more consecutive
+    # element-like tokens: an uppercase letter, optionally one
+    # lowercase letter, optionally 1-2 digits -- e.g. "Sr2Si",
+    # "K2Se2Te", "PbSnS2". We only subscript a run if at least
+    # one of its tokens contains a lowercase letter, which real
+    # two-letter element symbols almost always do (Sr, Se, Te,
+    # Pb, Sn, Mg, Ca, Cs, Cu, ...). That keeps the rule from
+    # firing on unrelated all-caps-plus-number text (e.g. an
+    # acronym followed by a year) that isn't a formula at all.
+    # New formulas in future papers are picked up automatically
+    # -- nothing to add to a list by hand.
+    # --------------------------------------------------------
 
-    for formula in formulas:
+    def _subscript_formula_run(match):
 
-        converted = re.sub(
-            r"([A-Za-z]+)(\d+)",
+        run = match.group(0)
+
+        if not any(c.islower() for c in run):
+            return run
+
+        return re.sub(
+            r"([A-Z][a-z]?)(\d{1,2})",
             lambda m:
                 m.group(1)
-                + m.group(2).translate(
-                    sub_map
-                ),
-            formula,
+                + m.group(2).translate(sub_map),
+            run,
         )
 
-        title = title.replace(
-            formula,
-            converted,
-        )
-
-    # PbSnS 2 -> PbSnS₂
     title = re.sub(
-        r"\b(PbSnS)\s+([0-9])\b",
-        lambda m:
-            m.group(1)
-            + m.group(2).translate(
-                sub_map
-            ),
+        r"(?:[A-Z][a-z]?\d{0,2}){2,}",
+        _subscript_formula_run,
+        title,
+    )
+
+    # Same idea for a formula with a stray space before its
+    # trailing subscript number (a spacing quirk sometimes
+    # introduced upstream), e.g. "PbSnS 2" -> "PbSnS₂".
+
+    def _subscript_spaced_formula(match):
+
+        letters, digits = match.group(1), match.group(2)
+
+        if not any(c.islower() for c in letters):
+            return match.group(0)
+
+        return letters + digits.translate(sub_map)
+
+    title = re.sub(
+        r"\b((?:[A-Z][a-z]?){2,})\s+([0-9]{1,2})\b",
+        _subscript_spaced_formula,
         title,
     )
 
