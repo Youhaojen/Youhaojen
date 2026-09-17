@@ -1,42 +1,80 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 import os
 import re
-import requests
 from pathlib import Path
+from urllib.parse import unquote
 
+import requests
+
+
+# ============================================================
+# Configuration
+# ============================================================
 
 SCHOLAR_ID = "46cZ1-wAAAAJ"
 README = Path("README.md")
 
-CROSSREF_API = "https://api.crossref.org/works"
+SERPAPI_URL = "https://serpapi.com/search.json"
 
 
-# ---------------------------------------------------------
-# Google Scholar
-# ---------------------------------------------------------
+# ============================================================
+# Conference filtering
+# ============================================================
+
+CONFERENCE_KEYWORDS = [
+    "conference",
+    "symposium",
+    "summit",
+    "workshop",
+    "meeting",
+    "proceedings",
+    "abstract",
+    "poster",
+    "presentation",
+]
+
+
+# ============================================================
+# HTTP session
+# ============================================================
+
+session = requests.Session()
+
+session.headers.update({
+    "User-Agent": (
+        "Mozilla/5.0 "
+        "(compatible; Youhaojen-GitHub-Scholar-Updater/1.0)"
+    )
+})
+
+
+# ============================================================
+# Google Scholar Author
+# ============================================================
 
 def get_publications():
+    """Get publications from Google Scholar author profile."""
 
     api_key = os.environ.get("SERPAPI_KEY")
 
     if not api_key:
         raise RuntimeError(
-            "SERPAPI_KEY is not set. "
-            "Please add it to GitHub Actions Secrets."
+            "SERPAPI_KEY is not set."
         )
-
-    url = "https://serpapi.com/search.json"
 
     params = {
         "engine": "google_scholar_author",
         "author_id": SCHOLAR_ID,
         "api_key": api_key,
         "hl": "en",
+        "num": 100,
+        "sort": "pubdate",
     }
 
-    response = requests.get(
-        url,
+    response = session.get(
+        SERPAPI_URL,
         params=params,
         timeout=30,
     )
@@ -45,29 +83,83 @@ def get_publications():
 
     data = response.json()
 
+    if "error" in data:
+        raise RuntimeError(
+            f"SerpAPI error: {data['error']}"
+        )
+
     return data.get("articles", [])
 
 
-# ---------------------------------------------------------
-# Data processing
-# ---------------------------------------------------------
+# ============================================================
+# Google Scholar citation page
+# ============================================================
 
-def get_year(pub):
+def get_citation_page(citation_id):
+    """
+    Get Google Scholar citation information for one article.
+    """
+
+    api_key = os.environ.get("SERPAPI_KEY")
+
+    params = {
+        "engine": "google_scholar_author",
+        "author_id": SCHOLAR_ID,
+        "view_op": "view_citation",
+        "citation_id": citation_id,
+        "api_key": api_key,
+        "hl": "en",
+    }
 
     try:
-        return int(pub.get("year") or 0)
+        response = session.get(
+            SERPAPI_URL,
+            params=params,
+            timeout=30,
+        )
 
+        response.raise_for_status()
+
+        data = response.json()
+
+        if "error" in data:
+            print(
+                f"  Scholar citation error: "
+                f"{data['error']}",
+                flush=True,
+            )
+            return {}
+
+        return data
+
+    except Exception as exc:
+        print(
+            f"  Warning: citation lookup failed: "
+            f"{exc}",
+            flush=True,
+        )
+        return {}
+
+
+# ============================================================
+# Basic utilities
+# ============================================================
+
+def get_year(pub):
+    try:
+        return int(pub.get("year") or 0)
     except (TypeError, ValueError):
         return 0
 
 
 def get_citations(pub):
-
     try:
-        value = pub.get("cited_by", {}).get("value")
-
+        value = (
+            pub
+            .get("cited_by", {})
+            .get("value")
+        )
         return int(value or 0)
-
     except (
         TypeError,
         ValueError,
@@ -76,136 +168,132 @@ def get_citations(pub):
         return 0
 
 
-# ---------------------------------------------------------
-# Title correction
-# ---------------------------------------------------------
+# ============================================================
+# Conference detection
+# ============================================================
 
-TITLE_CORRECTIONS = {
-
-    # Google Scholar occasionally loses subscripts,
-    # Greek letters, or special characters.
-
-    "Lattice dynamics and thermoelectric transport in (, Y; , Se, Te): Role of anharmonic phonons and Ag-sublattice vibrations":
-        "Lattice dynamics and thermoelectric transport in MAgCh2 (M=Sc, Y; Ch=S, Se, Te): Role of anharmonic phonons and Ag-sublattice vibrations",
-}
-
-
-def clean_title(title):
-
-    title = " ".join(
-        str(title).split()
+def is_conference(pub):
+    title = str(
+        pub.get("title", "")
     )
 
-    return TITLE_CORRECTIONS.get(
-        title,
-        title,
+    publication = str(
+        pub.get("publication", "")
+    )
+
+    text = (
+        f"{title} {publication}"
+        .lower()
+    )
+
+    return any(
+        keyword in text
+        for keyword in CONFERENCE_KEYWORDS
     )
 
 
-# ---------------------------------------------------------
-# DOI lookup
-# ---------------------------------------------------------
+# ============================================================
+# DOI extraction
+# ============================================================
 
-def get_doi(title, year=None):
+DOI_REGEX = re.compile(
+    r"""
+    (?:
+        https?://
+        (?:dx\.)?doi\.org/
+    )?
+    (10\.\d{4,9}/[-._;()/:A-Z0-9]+)
+    """,
+    re.IGNORECASE | re.VERBOSE,
+)
 
-    params = {
-        "query.title": title,
-        "rows": 3,
-    }
 
-    if year:
-        params["filter"] = f"from-pub-date:{year}-01-01,until-pub-date:{year}-12-31"
-
-    headers = {
-        "User-Agent":
-            "Youhaojen-GitHub-Scholar-Updater/1.0 "
-            "(mailto:your-email@example.com)"
-    }
-
-    try:
-
-        response = requests.get(
-            CROSSREF_API,
-            params=params,
-            headers=headers,
-            timeout=15,
-        )
-
-        response.raise_for_status()
-
-        data = response.json()
-
-        items = data.get(
-            "message",
-            {}
-        ).get(
-            "items",
-            []
-        )
-
-        if not items:
-            return None
-
-        # Try to find the closest title match
-        normalized_title = normalize_title(title)
-
-        for item in items:
-
-            candidate = " ".join(
-                item.get("title", [""])[0].split()
-            )
-
-            if normalize_title(candidate) == normalized_title:
-
-                doi = item.get("DOI")
-
-                if doi:
-                    return doi
-
-        # If exact match is not found,
-        # use the first Crossref result.
-        doi = items[0].get("DOI")
-
-        return doi
-
-    except Exception as e:
-
-        print(
-            f"Warning: DOI lookup failed for '{title}': {e}",
-            flush=True,
-        )
-
+def extract_doi_from_text(text):
+    if not text:
         return None
 
-
-def normalize_title(title):
-
-    title = title.lower()
-
-    # Remove punctuation and spaces
-    title = re.sub(
-        r"[^a-z0-9]",
-        "",
-        title,
+    text = unquote(
+        str(text)
     )
 
-    return title
+    match = DOI_REGEX.search(text)
+
+    if not match:
+        return None
+
+    doi = match.group(1)
+
+    return doi.rstrip(
+        ".,;:)]}>\"'"
+    )
 
 
-# ---------------------------------------------------------
+def search_doi_in_object(obj):
+    """
+    Recursively search the SerpAPI response
+    for a DOI.
+    """
+
+    if isinstance(obj, str):
+        return extract_doi_from_text(obj)
+
+    if isinstance(obj, dict):
+        for value in obj.values():
+            doi = search_doi_in_object(value)
+
+            if doi:
+                return doi
+
+    elif isinstance(obj, list):
+        for value in obj:
+            doi = search_doi_in_object(value)
+
+            if doi:
+                return doi
+
+    return None
+
+
+# ============================================================
+# Get DOI from Google Scholar
+# ============================================================
+
+def get_doi(pub):
+    """
+    Get DOI from the Google Scholar citation page.
+    """
+
+    citation_id = pub.get(
+        "citation_id"
+    )
+
+    if not citation_id:
+        return None
+
+    data = get_citation_page(
+        citation_id
+    )
+
+    if not data:
+        return None
+
+    return search_doi_in_object(
+        data
+    )
+
+
+# ============================================================
 # Format publication
-# ---------------------------------------------------------
+# ============================================================
 
 def format_publication(pub):
 
-    raw_title = pub.get(
+    title = pub.get(
         "title",
         "Unknown title",
     )
 
-    title = clean_title(raw_title)
-
-    journal = " ".join(
+    publication = " ".join(
         str(
             pub.get(
                 "publication",
@@ -214,40 +302,51 @@ def format_publication(pub):
         ).split()
     )
 
-    year = pub.get("year") or ""
+    citations = get_citations(
+        pub
+    )
 
-    citations = get_citations(pub)
+    doi = pub.get(
+        "_doi"
+    )
 
-    doi = pub.get("_doi")
+    # --------------------------------------------------------
+    # Link
+    # --------------------------------------------------------
 
     if doi:
-
-        link = f"https://doi.org/{doi}"
-
+        link = (
+            f"https://doi.org/{doi}"
+        )
     else:
-
         link = pub.get(
             "link",
             "",
         )
 
-    if link:
+    # --------------------------------------------------------
+    # Title
+    # --------------------------------------------------------
 
+    if link:
         title_text = (
             f"[{title}]({link})"
         )
-
     else:
+        title_text = (
+            f"**{title}**"
+        )
 
-        title_text = f"**{title}**"
+    # --------------------------------------------------------
+    # Metadata
+    # --------------------------------------------------------
 
     details = []
 
-    if journal:
-        details.append(journal)
-
-    if year:
-        details.append(str(year))
+    if publication:
+        details.append(
+            publication
+        )
 
     details.append(
         f"{citations} citations"
@@ -259,9 +358,9 @@ def format_publication(pub):
     )
 
 
-# ---------------------------------------------------------
-# README
-# ---------------------------------------------------------
+# ============================================================
+# README updater
+# ============================================================
 
 def update_section(
     readme,
@@ -295,9 +394,9 @@ def update_section(
     )
 
 
-# ---------------------------------------------------------
+# ============================================================
 # Main
-# ---------------------------------------------------------
+# ============================================================
 
 def main():
 
@@ -313,29 +412,62 @@ def main():
         flush=True,
     )
 
-    # -----------------------------------------------------
-    # DOI lookup
-    # -----------------------------------------------------
+    # --------------------------------------------------------
+    # Filter conference publications
+    # --------------------------------------------------------
+
+    journal_publications = []
 
     print(
-        "\nLooking up DOIs...",
+        "\nFiltering publications...",
         flush=True,
     )
 
     for pub in publications:
 
-        title = clean_title(
-            pub.get(
-                "title",
-                "",
+        if is_conference(pub):
+
+            print(
+                f"  Excluding conference: "
+                f"{pub.get('title', '')}",
+                flush=True,
             )
+
+            continue
+
+        journal_publications.append(
+            pub
         )
 
-        year = get_year(pub)
+    print(
+        f"Journal publications: "
+        f"{len(journal_publications)}",
+        flush=True,
+    )
+
+    # --------------------------------------------------------
+    # Get DOI from Google Scholar
+    # --------------------------------------------------------
+
+    print(
+        "\nGetting DOIs from Google Scholar...",
+        flush=True,
+    )
+
+    for pub in journal_publications:
+
+        title = pub.get(
+            "title",
+            "",
+        )
+
+        print(
+            f"\n  {title}",
+            flush=True,
+        )
 
         doi = get_doi(
-            title,
-            year,
+            pub
         )
 
         pub["_doi"] = doi
@@ -343,40 +475,40 @@ def main():
         if doi:
 
             print(
-                f"  DOI found: {doi}",
+                f"  DOI: {doi}",
                 flush=True,
             )
 
         else:
 
             print(
-                f"  DOI not found: {title}",
+                "  DOI: not found",
                 flush=True,
             )
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # Latest 3
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     latest = sorted(
-        publications,
+        journal_publications,
         key=get_year,
         reverse=True,
     )[:3]
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # Most cited 3
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     most_cited = sorted(
-        publications,
+        journal_publications,
         key=get_citations,
         reverse=True,
     )[:3]
 
-    # -----------------------------------------------------
+    # --------------------------------------------------------
     # Update README
-    # -----------------------------------------------------
+    # --------------------------------------------------------
 
     print(
         "\nUpdating README...",
@@ -407,7 +539,7 @@ def main():
     )
 
     print(
-        "README updated successfully.",
+        "\nREADME updated successfully.",
         flush=True,
     )
 
