@@ -12,15 +12,11 @@ README = Path("README.md")
 def format_publication(pub):
     bib = pub["bib"]
 
-    title = bib.get("title", "Unknown title")
-    journal = bib.get("venue", "")
+    title = " ".join(bib.get("title", "Unknown title").split())
+    journal = " ".join(bib.get("venue", "").split())
     year = bib.get("pub_year", "")
     citations = pub.get("num_citations", 0)
-    url = bib.get("url", "")
-
-    # Remove unnecessary whitespace
-    title = " ".join(title.split())
-    journal = " ".join(journal.split())
+    url = bib.get("pub_url", "") or bib.get("url", "")
 
     if url:
         title_text = f"[{title}]({url})"
@@ -41,13 +37,17 @@ def format_publication(pub):
 
 
 def update_section(readme, start_marker, end_marker, publications):
+
     pattern = (
         re.escape(start_marker)
         + r".*?"
         + re.escape(end_marker)
     )
 
-    content = "\n".join(format_publication(pub) for pub in publications)
+    content = "\n".join(
+        format_publication(pub)
+        for pub in publications
+    )
 
     replacement = (
         f"{start_marker}\n"
@@ -65,31 +65,34 @@ def update_section(readme, start_marker, end_marker, publications):
 
 def main():
 
-    print("Fetching Google Scholar profile...")
+    print("Fetching Google Scholar profile...", flush=True)
 
     author = scholarly.search_author_id(SCHOLAR_ID)
-    author = scholarly.fill(author, sections=["publications"])
 
-    publications = author["publications"]
+    print("Loading publications...", flush=True)
 
-    print(f"Found {len(publications)} publications")
+    author = scholarly.fill(
+        author,
+        sections=["publications"],
+    )
 
-    # Fill publication information
-    filled = []
+    publications = author.get("publications", [])
 
-    for pub in publications:
-        try:
-            pub = scholarly.fill(pub)
-            filled.append(pub)
-        except Exception as e:
-            print(f"Warning: failed to fetch publication: {e}")
+    print(
+        f"Found {len(publications)} publications",
+        flush=True,
+    )
+
+    # Do NOT call scholarly.fill() for every publication.
+    # The author profile already contains citation counts,
+    # titles, journals, years, and publication URLs.
 
     # ---------------------------------------------------------
     # Latest 3
     # ---------------------------------------------------------
 
     latest = sorted(
-        filled,
+        publications,
         key=lambda x: int(
             x["bib"].get("pub_year", 0) or 0
         ),
@@ -101,7 +104,7 @@ def main():
     # ---------------------------------------------------------
 
     most_cited = sorted(
-        filled,
+        publications,
         key=lambda x: x.get("num_citations", 0),
         reverse=True,
     )[:3]
@@ -109,6 +112,8 @@ def main():
     # ---------------------------------------------------------
     # Update README
     # ---------------------------------------------------------
+
+    print("Updating README...", flush=True)
 
     readme = README.read_text(encoding="utf-8")
 
@@ -131,7 +136,7 @@ def main():
         encoding="utf-8",
     )
 
-    print("README updated successfully.")
+    print("README updated successfully.", flush=True)
 
 
 if __name__ == "__main__":
