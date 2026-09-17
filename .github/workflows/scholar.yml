@@ -2,7 +2,7 @@ name: Update Google Scholar
 
 on:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 2 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -23,9 +23,11 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install "bibtexparser<2.0" scholarly
+          pip install requests
 
       - name: Update publications
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
         run: |
           python scripts/update_scholar.py
 
