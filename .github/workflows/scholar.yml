@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install scholarly
+          pip install "bibtexparser<2.0" scholarly
 
       - name: Update publications
         run: |
