@@ -18,20 +18,20 @@ My research focuses on **computational materials science and machine learning**,
 <!-- SCHOLAR-LATEST:START -->
 - **Lattice dynamics and thermoelectric transport in (, Y;, Se, Te): Role of anharmonic phonons and Ag-sublattice vibrations**
   *Physical Review B 114 (16), 165201, 2026, 2026 · 0 citations*
-- **The High-Value Thermoelectric Properties of Ruby-Silver Ores Ag₃XS₃ (X = As, Sb): A Combined Density Functional Theory and Machine Learning Approach**
+- [The High-Value Thermoelectric Properties of Ruby-Silver Ores Ag₃XS₃ (X = As, Sb): A Combined Density Functional Theory and Machine Learning Approach](https://doi.org/10.1021/acsaem.6c01192)
   *ACS Applied Energy Materials, 2026, 2026 · 0 citations*
-- **Achieving high thermoelectric performance in metal sulfide PbSnS₂ through strain-mediated lone-pair expression amplification and multi-band conduction**
+- [Achieving high thermoelectric performance in metal sulfide PbSnS₂ through strain-mediated lone-pair expression amplification and multi-band conduction](https://doi.org/10.1039/d6ta01797e)
   *Journal of Materials Chemistry A, 2026, 2026 · 0 citations*
 <!-- SCHOLAR-LATEST:END -->
 
 ### Most Cited
 
 <!-- SCHOLAR-CITED:START -->
-- **First-Principles Study on the Thermoelectric Properties of Sr₂Si and Sr₂Ge**
+- [First-Principles Study on Thermoelectric Properties of Penta-Sb2x (X=Si, Ge, Sn) Monolayers](https://doi.org/10.2139/ssrn.4259973)
   *Materials Today Physics 32, 101015, 2023, 2023 · 25 citations*
-- **Influence of different substrate materials on thermoelectric module with bulk legs**
+- [Influence of different substrate materials on thermoelectric module with bulk legs](https://doi.org/10.1016/j.jpowsour.2019.227055)
   *Journal of Power Sources 438, 227055, 2019, 2019 · 20 citations*
-- **Enhanced thermoelectric performance of BiCuTeO by excess Bi additions**
+- [Enhanced thermoelectric performance of BiCuTeO by excess Bi additions](https://doi.org/10.1016/j.ceramint.2019.02.003)
   *Ceramics International, 2019, 2019 · 18 citations*
 <!-- SCHOLAR-CITED:END -->
 
