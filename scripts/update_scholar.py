@@ -55,7 +55,9 @@ session.headers.update({
 # ============================================================
 
 def get_publications():
-    """Get publications from Google Scholar author profile."""
+    """
+    Get publications from Google Scholar author profile.
+    """
 
     api_key = os.environ.get("SERPAPI_KEY")
 
@@ -88,7 +90,10 @@ def get_publications():
             f"SerpAPI error: {data['error']}"
         )
 
-    return data.get("articles", [])
+    return data.get(
+        "articles",
+        []
+    )
 
 
 # ============================================================
@@ -97,7 +102,8 @@ def get_publications():
 
 def get_citation_page(citation_id):
     """
-    Get Google Scholar citation information for one article.
+    Get detailed Google Scholar citation information
+    for one publication.
     """
 
     api_key = os.environ.get("SERPAPI_KEY")
@@ -129,11 +135,13 @@ def get_citation_page(citation_id):
         data = response.json()
 
         if "error" in data:
+
             print(
                 f"  Scholar citation error: "
                 f"{data['error']}",
                 flush=True,
             )
+
             return {}
 
         return data
@@ -154,18 +162,26 @@ def get_citation_page(citation_id):
 # ============================================================
 
 def get_year(pub):
-    """Return publication year as integer."""
+    """
+    Return publication year as integer.
+    """
 
     try:
-        return int(pub.get("year") or 0)
+        return int(
+            pub.get("year") or 0
+        )
 
-    except (TypeError, ValueError):
-
+    except (
+        TypeError,
+        ValueError,
+    ):
         return 0
 
 
 def get_citations(pub):
-    """Return citation count as integer."""
+    """
+    Return citation count as integer.
+    """
 
     try:
 
@@ -175,14 +191,15 @@ def get_citations(pub):
             .get("value")
         )
 
-        return int(value or 0)
+        return int(
+            value or 0
+        )
 
     except (
         TypeError,
         ValueError,
         AttributeError,
     ):
-
         return 0
 
 
@@ -194,21 +211,19 @@ def clean_title(title):
     """
     Clean common Google Scholar formatting problems.
 
-    This does not contain publication-specific DOI/title
-    corrections. It only handles general formatting issues.
+    No publication-specific title corrections are used here.
     """
 
     title = " ".join(
         str(title).split()
     )
 
-    # --------------------------------------------------------
-    # Common chemical formula formatting
-    # --------------------------------------------------------
-
     replacements = {
 
+        # ----------------------------------------------------
         # Thermoelectric materials
+        # ----------------------------------------------------
+
         "PbSnS 2": "PbSnS₂",
         "PbSnS2": "PbSnS₂",
 
@@ -224,7 +239,6 @@ def clean_title(title):
         "Sr 2 Ge": "Sr₂Ge",
         "Sr2Ge": "Sr₂Ge",
 
-        # Other common formula formatting
         "Ag 2 Se": "Ag₂Se",
         "Ag2Se": "Ag₂Se",
 
@@ -234,36 +248,27 @@ def clean_title(title):
         "CsCuBr 3": "CsCuBr₃",
         "CsCuBr3": "CsCuBr₃",
 
+        "K 3 SbS 4": "K₃SbS₄",
+        "K3SbS4": "K₃SbS₄",
+
+        "K 3 SbTe 3": "K₃SbTe₃",
+        "K3SbTe3": "K₃SbTe₃",
+
+        "K 3 BiTe 3": "K₃BiTe₃",
+        "K3BiTe3": "K₃BiTe₃",
+
+        "Mg 2 GeO 4": "Mg₂GeO₄",
+        "Mg2GeO4": "Mg₂GeO₄",
+
+        "Ca 2 GeO 4": "Ca₂GeO₄",
+        "Ca2GeO4": "Ca₂GeO₄",
+
     }
 
     for old, new in replacements.items():
-        title = title.replace(old, new)
-
-    # --------------------------------------------------------
-    # MAgCh2 paper
-    #
-    # Google Scholar may lose the chemical formula completely:
-    #
-    # "in (, Y; , Se, Te):"
-    #
-    # Restore it based on the remaining title structure.
-    # --------------------------------------------------------
-
-    broken_prefix = (
-        "Lattice dynamics and thermoelectric transport in "
-        "(, Y; , Se, Te):"
-    )
-
-    correct_prefix = (
-        "Lattice dynamics and thermoelectric transport in "
-        "MAgCh₂ (M = Sc, Y; Ch = S, Se, Te):"
-    )
-
-    if title.startswith(broken_prefix):
-
-        title = (
-            correct_prefix
-            + title[len(broken_prefix):]
+        title = title.replace(
+            old,
+            new,
         )
 
     return title
@@ -279,11 +284,17 @@ def is_conference(pub):
     """
 
     title = str(
-        pub.get("title", "")
+        pub.get(
+            "title",
+            "",
+        )
     )
 
     publication = str(
-        pub.get("publication", "")
+        pub.get(
+            "publication",
+            "",
+        )
     )
 
     text = (
@@ -307,7 +318,10 @@ DOI_REGEX = re.compile(
         https?://
         (?:dx\.)?doi\.org/
     )?
-    (10\.\d{4,9}/[-._;()/:A-Z0-9]+)
+    (
+        10\.\d{4,9}/
+        [-._;()/:A-Z0-9]+
+    )
     """,
     re.IGNORECASE | re.VERBOSE,
 )
@@ -315,17 +329,7 @@ DOI_REGEX = re.compile(
 
 def extract_doi_from_text(text):
     """
-    Extract a DOI from a string.
-
-    Also removes accidental extra path components.
-
-    Example:
-
-        10.1039/d6ta01797e/1267418
-
-    becomes:
-
-        10.1039/d6ta01797e
+    Extract a DOI from arbitrary text.
     """
 
     if not text:
@@ -333,9 +337,11 @@ def extract_doi_from_text(text):
 
     text = unquote(
         str(text)
-    )
+    ).strip()
 
-    match = DOI_REGEX.search(text)
+    match = DOI_REGEX.search(
+        text
+    )
 
     if not match:
         return None
@@ -343,58 +349,84 @@ def extract_doi_from_text(text):
     doi = match.group(1)
 
     # --------------------------------------------------------
-    # DOI cleanup
+    # Remove common trailing punctuation
     # --------------------------------------------------------
 
-    # Remove URL/path suffixes accidentally attached to DOI.
-    #
-    # Example:
-    #
-    # 10.1039/d6ta01797e/1267418
-    #
-    # -> 10.1039/d6ta01797e
-    #
-
-    if "/" in doi:
-
-        prefix, suffix = doi.split(
-            "/",
-            1,
-        )
-
-        # DOI suffixes normally contain the article identifier.
-        # Keep only the first path component.
-        suffix = suffix.split(
-            "/",
-            1,
-        )[0]
-
-        doi = (
-            f"{prefix}/{suffix}"
-        )
-
-    # Remove trailing punctuation.
     doi = doi.rstrip(
         ".,;:)]}>\"'"
     )
 
+    # --------------------------------------------------------
+    # Remove URL query / fragment
+    # --------------------------------------------------------
+
+    doi = doi.split(
+        "?",
+        1,
+    )[0]
+
+    doi = doi.split(
+        "#",
+        1,
+    )[0]
+
     return doi
 
 
+# ============================================================
+# Recursive DOI search
+# ============================================================
+
 def search_doi_in_object(obj):
     """
-    Recursively search a SerpAPI response for DOI strings.
+    Recursively search a SerpAPI response for a DOI.
+
+    The search is intentionally limited to values that
+    actually contain a DOI-like string.
     """
 
-    if isinstance(obj, str):
+    if isinstance(
+        obj,
+        str,
+    ):
 
         return extract_doi_from_text(
             obj
         )
 
-    if isinstance(obj, dict):
+    if isinstance(
+        obj,
+        dict,
+    ):
 
-        for value in obj.values():
+        # Search DOI-related fields first.
+        preferred_keys = [
+            "doi",
+            "DOI",
+            "link",
+            "url",
+            "resource",
+            "description",
+            "snippet",
+            "title",
+        ]
+
+        for key in preferred_keys:
+
+            if key in obj:
+
+                doi = search_doi_in_object(
+                    obj[key]
+                )
+
+                if doi:
+                    return doi
+
+        # Search remaining fields.
+        for key, value in obj.items():
+
+            if key in preferred_keys:
+                continue
 
             doi = search_doi_in_object(
                 value
@@ -403,7 +435,10 @@ def search_doi_in_object(obj):
             if doi:
                 return doi
 
-    elif isinstance(obj, list):
+    elif isinstance(
+        obj,
+        list,
+    ):
 
         for value in obj:
 
@@ -423,7 +458,7 @@ def search_doi_in_object(obj):
 
 def get_doi(pub):
     """
-    Get DOI from Google Scholar citation page.
+    Get DOI from the Google Scholar citation page.
     """
 
     citation_id = pub.get(
@@ -452,6 +487,13 @@ def get_doi(pub):
 # ============================================================
 
 def format_publication(pub):
+    """
+    Convert a publication into Markdown.
+
+    IMPORTANT:
+    If DOI is unavailable, the title is NOT linked to
+    Google Scholar.
+    """
 
     raw_title = pub.get(
         "title",
@@ -480,7 +522,7 @@ def format_publication(pub):
     )
 
     # --------------------------------------------------------
-    # Link
+    # DOI link
     # --------------------------------------------------------
 
     if doi:
@@ -489,25 +531,13 @@ def format_publication(pub):
             f"https://doi.org/{doi}"
         )
 
-    else:
-
-        link = pub.get(
-            "link",
-            "",
-        )
-
-    # --------------------------------------------------------
-    # Title
-    # --------------------------------------------------------
-
-    if link:
-
         title_text = (
             f"[{title}]({link})"
         )
 
     else:
 
+        # Do NOT fallback to Google Scholar.
         title_text = (
             f"**{title}**"
         )
@@ -670,7 +700,7 @@ def main():
         else:
 
             print(
-                "  DOI: not found",
+                "  DOI: NOT FOUND",
                 flush=True,
             )
 
@@ -695,6 +725,36 @@ def main():
     )[:3]
 
     # --------------------------------------------------------
+    # Show selected publications
+    # --------------------------------------------------------
+
+    print(
+        "\nLatest:",
+        flush=True,
+    )
+
+    for pub in latest:
+
+        print(
+            f"  {pub.get('title', '')}",
+            f"({pub.get('_doi') or 'NO DOI'})",
+            flush=True,
+        )
+
+    print(
+        "\nMost Cited:",
+        flush=True,
+    )
+
+    for pub in most_cited:
+
+        print(
+            f"  {pub.get('title', '')}",
+            f"({pub.get('_doi') or 'NO DOI'})",
+            flush=True,
+        )
+
+    # --------------------------------------------------------
     # Update README
     # --------------------------------------------------------
 
@@ -702,6 +762,12 @@ def main():
         "\nUpdating README...",
         flush=True,
     )
+
+    if not README.exists():
+
+        raise FileNotFoundError(
+            f"{README} does not exist."
+        )
 
     readme = README.read_text(
         encoding="utf-8"
