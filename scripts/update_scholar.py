@@ -1,25 +1,42 @@
-#!/usr/bin/env python3
-
-from scholarly import scholarly
+import os
+import requests
 from pathlib import Path
 import re
 
 
 SCHOLAR_ID = "46cZ1-wAAAAJ"
 README = Path("README.md")
+API_KEY = os.environ["SERPAPI_KEY"]
+
+
+def get_publications():
+    url = "https://serpapi.com/search.json"
+
+    params = {
+        "engine": "google_scholar_author",
+        "author_id": SCHOLAR_ID,
+        "api_key": API_KEY,
+        "hl": "en",
+    }
+
+    response = requests.get(url, params=params, timeout=30)
+    response.raise_for_status()
+
+    data = response.json()
+
+    return data.get("articles", [])
 
 
 def format_publication(pub):
-    bib = pub["bib"]
 
-    title = " ".join(bib.get("title", "Unknown title").split())
-    journal = " ".join(bib.get("venue", "").split())
-    year = bib.get("pub_year", "")
-    citations = pub.get("num_citations", 0)
-    url = bib.get("pub_url", "") or bib.get("url", "")
+    title = pub.get("title", "Unknown title")
+    journal = pub.get("publication", "")
+    year = pub.get("year", "")
+    citations = pub.get("cited_by", {}).get("value", 0)
+    link = pub.get("link", "")
 
-    if url:
-        title_text = f"[{title}]({url})"
+    if link:
+        title_text = f"[{title}]({link})"
     else:
         title_text = f"**{title}**"
 
@@ -36,13 +53,9 @@ def format_publication(pub):
     return f"- {title_text}  \n  *{' · '.join(details)}*"
 
 
-def update_section(readme, start_marker, end_marker, publications):
+def update_section(readme, start, end, publications):
 
-    pattern = (
-        re.escape(start_marker)
-        + r".*?"
-        + re.escape(end_marker)
-    )
+    pattern = re.escape(start) + r".*?" + re.escape(end)
 
     content = "\n".join(
         format_publication(pub)
@@ -50,9 +63,9 @@ def update_section(readme, start_marker, end_marker, publications):
     )
 
     replacement = (
-        f"{start_marker}\n"
+        f"{start}\n"
         f"{content}\n"
-        f"{end_marker}"
+        f"{end}"
     )
 
     return re.sub(
@@ -65,55 +78,28 @@ def update_section(readme, start_marker, end_marker, publications):
 
 def main():
 
-    print("Fetching Google Scholar profile...", flush=True)
+    print("Fetching Google Scholar...", flush=True)
 
-    author = scholarly.search_author_id(SCHOLAR_ID)
-
-    print("Loading publications...", flush=True)
-
-    author = scholarly.fill(
-        author,
-        sections=["publications"],
-    )
-
-    publications = author.get("publications", [])
+    publications = get_publications()
 
     print(
         f"Found {len(publications)} publications",
         flush=True,
     )
 
-    # Do NOT call scholarly.fill() for every publication.
-    # The author profile already contains citation counts,
-    # titles, journals, years, and publication URLs.
-
-    # ---------------------------------------------------------
     # Latest 3
-    # ---------------------------------------------------------
-
     latest = sorted(
         publications,
-        key=lambda x: int(
-            x["bib"].get("pub_year", 0) or 0
-        ),
+        key=lambda x: int(x.get("year", 0) or 0),
         reverse=True,
     )[:3]
 
-    # ---------------------------------------------------------
     # Most cited 3
-    # ---------------------------------------------------------
-
     most_cited = sorted(
         publications,
-        key=lambda x: x.get("num_citations", 0),
+        key=lambda x: x.get("cited_by", {}).get("value", 0),
         reverse=True,
     )[:3]
-
-    # ---------------------------------------------------------
-    # Update README
-    # ---------------------------------------------------------
-
-    print("Updating README...", flush=True)
 
     readme = README.read_text(encoding="utf-8")
 
