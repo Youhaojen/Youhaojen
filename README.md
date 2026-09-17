@@ -16,23 +16,23 @@ My research focuses on **computational materials science and machine learning**,
 ### Latest
 
 <!-- SCHOLAR-LATEST:START -->
-- [Lattice dynamics and thermoelectric transport in MAgCh2 (M=Sc, Y; Ch=S, Se, Te): Role of anharmonic phonons and Ag-sublattice vibrations](https://doi.org/10.1016/j.mtcomm.2026.115081)  
-  *Physical Review B 114 (16), 165201, 2026 · 2026 · 0 citations*
+- [Lattice dynamics and thermoelectric transport in (, Y; , Se, Te): Role of anharmonic phonons and Ag-sublattice vibrations](https://doi.org/10.1103/rchb-m27r)  
+  *Physical Review B 114 (16), 165201, 2026 · 0 citations*
 - [The High-Value Thermoelectric Properties of Ruby-Silver Ores Ag3XS3 (X = As, Sb): A Combined Density Functional Theory and Machine Learning Approach](https://doi.org/10.1021/acsaem.6c01192)  
-  *ACS Applied Energy Materials, 2026 · 2026 · 0 citations*
-- [Machine-Learning-Based Study of Ionic Diffusion and Lattice Dynamics in K2Se2Te and Related K-Based Superionic Materials](https://doi.org/10.1103/gn8t-h69l)  
-  *APS Global Physics Summit 2026, 2026 · 2026 · 0 citations*
+  *ACS Applied Energy Materials, 2026 · 0 citations*
+- [Achieving high thermoelectric performance in metal sulfide PbSnS 2 through strain-mediated lone-pair expression amplification and multi-band conduction](https://doi.org/10.1039/d6ta01797e/1267418)  
+  *Journal of Materials Chemistry A, 2026 · 0 citations*
 <!-- SCHOLAR-LATEST:END -->
 
 ### Most Cited
 
 <!-- SCHOLAR-CITED:START -->
-- [First-Principles Study on the Thermoelectric Properties of Sr2Si and Sr2Ge](https://doi.org/10.1016/j.mtphys.2023.101015)  
-  *Materials Today Physics 32, 101015, 2023 · 2023 · 25 citations*
-- [Influence of different substrate materials on thermoelectric module with bulk legs](https://doi.org/10.1016/j.jpowsour.2019.227055)  
-  *Journal of Power Sources 438, 227055, 2019 · 2019 · 20 citations*
-- [Enhanced thermoelectric performance of BiCuTeO by excess Bi additions](https://doi.org/10.1016/j.ceramint.2019.02.003)  
-  *Ceramics International, 2019 · 2019 · 18 citations*
+- [First-Principles Study on the Thermoelectric Properties of Sr2Si and Sr2Ge](https://scholar.google.com/citations?view_op=view_citation&hl=en&user=46cZ1-wAAAAJ&pagesize=100&sortby=pubdate&citation_for_view=46cZ1-wAAAAJ:2osOgNQ5qMEC)  
+  *Materials Today Physics 32, 101015, 2023 · 25 citations*
+- [Influence of different substrate materials on thermoelectric module with bulk legs](https://scholar.google.com/citations?view_op=view_citation&hl=en&user=46cZ1-wAAAAJ&pagesize=100&sortby=pubdate&citation_for_view=46cZ1-wAAAAJ:d1gkVwhDpl0C)  
+  *Journal of Power Sources 438, 227055, 2019 · 20 citations*
+- [Enhanced thermoelectric performance of BiCuTeO by excess Bi additions](https://scholar.google.com/citations?view_op=view_citation&hl=en&user=46cZ1-wAAAAJ&pagesize=100&sortby=pubdate&citation_for_view=46cZ1-wAAAAJ:u5HHmVD_uO8C)  
+  *Ceramics International, 2019 · 18 citations*
 <!-- SCHOLAR-CITED:END -->
 
 **[Google Scholar](https://scholar.google.com/citations?user=46cZ1-wAAAAJ&hl=en)**
