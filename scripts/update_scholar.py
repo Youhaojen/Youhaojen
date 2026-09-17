@@ -22,11 +22,7 @@ README = Path("README.md")
 SERPAPI_URL = "https://serpapi.com/search.json"
 CROSSREF_URL = "https://api.crossref.org/works"
 
-# Crossref matching threshold.
-# Higher = stricter title matching.
 CROSSREF_TITLE_THRESHOLD = 0.88
-
-# Small delay between Crossref requests.
 CROSSREF_DELAY = 0.2
 
 
@@ -55,20 +51,16 @@ session = requests.Session()
 
 session.headers.update({
     "User-Agent": (
-        "Youhaojen-GitHub-Scholar-Updater/1.0 "
-        "(mailto:youhaojen@example.com)"
+        "Youhaojen-GitHub-Scholar-Updater/1.0"
     )
 })
 
 
 # ============================================================
-# Google Scholar Author
+# Google Scholar
 # ============================================================
 
 def get_publications():
-    """
-    Get publications from Google Scholar author profile.
-    """
 
     api_key = os.environ.get("SERPAPI_KEY")
 
@@ -107,15 +99,7 @@ def get_publications():
     )
 
 
-# ============================================================
-# Google Scholar citation page
-# ============================================================
-
 def get_citation_page(citation_id):
-    """
-    Get detailed Google Scholar citation information
-    for one publication.
-    """
 
     api_key = os.environ.get("SERPAPI_KEY")
 
@@ -146,13 +130,11 @@ def get_citation_page(citation_id):
         data = response.json()
 
         if "error" in data:
-
             print(
                 f"  Scholar citation error: "
                 f"{data['error']}",
                 flush=True,
             )
-
             return {}
 
         return data
@@ -173,9 +155,6 @@ def get_citation_page(citation_id):
 # ============================================================
 
 def get_year(pub):
-    """
-    Return publication year as integer.
-    """
 
     try:
         return int(
@@ -190,9 +169,6 @@ def get_year(pub):
 
 
 def get_citations(pub):
-    """
-    Return citation count as integer.
-    """
 
     try:
 
@@ -219,25 +195,17 @@ def get_citations(pub):
 # ============================================================
 
 def normalize_title(title):
-    """
-    Normalize a title for Crossref matching.
-
-    This is NOT a title correction.
-    It only removes formatting differences.
-    """
 
     if not title:
         return ""
 
     title = str(title)
 
-    # Unicode normalization.
     title = unicodedata.normalize(
         "NFKD",
         title,
     )
 
-    # Remove combining marks.
     title = "".join(
         char
         for char in title
@@ -246,8 +214,8 @@ def normalize_title(title):
 
     title = title.lower()
 
-    # Replace common unicode symbols.
     replacements = {
+
         "₂": "2",
         "₃": "3",
         "₄": "4",
@@ -257,28 +225,29 @@ def normalize_title(title):
         "₈": "8",
         "₉": "9",
         "₀": "0",
+
         "−": "-",
         "–": "-",
         "—": "-",
+
         "α": "alpha",
         "β": "beta",
         "γ": "gamma",
     }
 
     for old, new in replacements.items():
+
         title = title.replace(
             old,
             new,
         )
 
-    # Normalize punctuation to spaces.
     title = re.sub(
         r"[^a-z0-9]+",
         " ",
         title,
     )
 
-    # Collapse whitespace.
     title = " ".join(
         title.split()
     )
@@ -286,10 +255,10 @@ def normalize_title(title):
     return title
 
 
-def title_similarity(title_a, title_b):
-    """
-    Calculate normalized title similarity.
-    """
+def title_similarity(
+    title_a,
+    title_b,
+):
 
     a = normalize_title(
         title_a
@@ -313,14 +282,14 @@ def title_similarity(title_a, title_b):
 
 
 # ============================================================
-# Title display cleaning
+# Display title cleaning
 # ============================================================
 
 def clean_title(title):
     """
-    Clean common Google Scholar chemical formula formatting.
+    General formatting cleanup only.
 
-    No publication-specific title corrections are used.
+    No paper-specific title corrections.
     """
 
     title = " ".join(
@@ -384,9 +353,6 @@ def clean_title(title):
 # ============================================================
 
 def is_conference(pub):
-    """
-    Detect conference / presentation records.
-    """
 
     title = str(
         pub.get(
@@ -418,13 +384,6 @@ def is_conference(pub):
 # ============================================================
 
 def normalize_doi(value):
-    """
-    Normalize a DOI string.
-
-    This function does not arbitrarily remove slash-separated
-    DOI suffixes because '/' can legitimately occur in DOI
-    suffixes.
-    """
 
     if not value:
         return None
@@ -433,7 +392,6 @@ def normalize_doi(value):
         str(value)
     ).strip()
 
-    # Remove DOI URL prefix.
     value = re.sub(
         r"^https?://(?:dx\.)?doi\.org/",
         "",
@@ -441,7 +399,6 @@ def normalize_doi(value):
         flags=re.IGNORECASE,
     )
 
-    # Remove "doi:" prefix.
     value = re.sub(
         r"^doi:\s*",
         "",
@@ -451,7 +408,6 @@ def normalize_doi(value):
 
     value = value.strip()
 
-    # Remove URL query / fragment.
     value = value.split(
         "?",
         1,
@@ -462,12 +418,10 @@ def normalize_doi(value):
         1,
     )[0]
 
-    # Remove trailing punctuation.
     value = value.rstrip(
         ".,;:)]}>\"'"
     )
 
-    # DOI prefix validation.
     if not re.match(
         r"^10\.\d{4,9}/",
         value,
@@ -475,7 +429,6 @@ def normalize_doi(value):
     ):
         return None
 
-    # DOI suffix must not contain whitespace.
     if re.search(
         r"\s",
         value,
@@ -486,7 +439,7 @@ def normalize_doi(value):
 
 
 # ============================================================
-# DOI extraction from text
+# DOI extraction
 # ============================================================
 
 DOI_REGEX = re.compile(
@@ -505,9 +458,6 @@ DOI_REGEX = re.compile(
 
 
 def extract_doi_from_text(text):
-    """
-    Extract DOI-like strings from arbitrary text.
-    """
 
     if not text:
         return None
@@ -529,13 +479,10 @@ def extract_doi_from_text(text):
 
 
 # ============================================================
-# Recursive Scholar DOI search
+# Recursive DOI search
 # ============================================================
 
 def search_doi_in_object(obj):
-    """
-    Recursively search a SerpAPI response for DOI.
-    """
 
     if isinstance(
         obj,
@@ -560,7 +507,6 @@ def search_doi_in_object(obj):
             "resource",
         ]
 
-        # Search DOI-related fields first.
         for key in preferred_keys:
 
             if key not in obj:
@@ -586,7 +532,6 @@ def search_doi_in_object(obj):
             if doi:
                 return doi
 
-        # Search remaining values.
         for key, value in obj.items():
 
             if key in preferred_keys:
@@ -617,13 +562,10 @@ def search_doi_in_object(obj):
 
 
 # ============================================================
-# Crossref author matching
+# Scholar author extraction
 # ============================================================
 
 def get_scholar_authors(pub):
-    """
-    Extract author surnames from Google Scholar record.
-    """
 
     authors = pub.get(
         "authors",
@@ -633,11 +575,6 @@ def get_scholar_authors(pub):
     if not authors:
         return []
 
-    # SerpAPI usually returns a string such as:
-    #
-    # "Hao-Jen You, Hsin Lin, ..."
-    #
-    # Split conservatively.
     if isinstance(
         authors,
         str,
@@ -671,6 +608,7 @@ def get_scholar_authors(pub):
         parts = name.split()
 
         if parts:
+
             surnames.append(
                 normalize_title(
                     parts[-1]
@@ -680,13 +618,14 @@ def get_scholar_authors(pub):
     return surnames
 
 
+# ============================================================
+# Crossref author matching
+# ============================================================
+
 def crossref_author_match(
     scholar_authors,
     crossref_authors,
 ):
-    """
-    Check whether the first author is reasonably consistent.
-    """
 
     if not scholar_authors:
         return True
@@ -716,14 +655,6 @@ def crossref_author_match(
 # ============================================================
 
 def search_crossref(pub):
-    """
-    Search Crossref using publication title.
-
-    DOI is accepted only when:
-      1. title similarity is sufficiently high
-      2. publication year is reasonably consistent
-      3. first author is consistent when available
-    """
 
     title = pub.get(
         "title",
@@ -784,15 +715,15 @@ def search_crossref(pub):
 
     for item in items:
 
-        crossref_titles = item.get(
+        titles = item.get(
             "title",
             [],
         )
 
-        if not crossref_titles:
+        if not titles:
             continue
 
-        crossref_title = crossref_titles[0]
+        crossref_title = titles[0]
 
         similarity = title_similarity(
             title,
@@ -800,7 +731,7 @@ def search_crossref(pub):
         )
 
         # ----------------------------------------------------
-        # Year
+        # Publication year
         # ----------------------------------------------------
 
         crossref_year = None
@@ -820,9 +751,11 @@ def search_crossref(pub):
             if date_parts:
 
                 try:
+
                     crossref_year = int(
                         date_parts[0][0]
                     )
+
                     break
 
                 except (
@@ -832,16 +765,10 @@ def search_crossref(pub):
                 ):
                     pass
 
-        # ----------------------------------------------------
-        # Year compatibility
-        # ----------------------------------------------------
-
         year_ok = True
 
         if year and crossref_year:
 
-            # Allow online / print publication date
-            # differences of up to one year.
             year_ok = (
                 abs(
                     year - crossref_year
@@ -852,7 +779,7 @@ def search_crossref(pub):
             continue
 
         # ----------------------------------------------------
-        # Author compatibility
+        # Author
         # ----------------------------------------------------
 
         crossref_authors = item.get(
@@ -860,12 +787,10 @@ def search_crossref(pub):
             [],
         )
 
-        author_ok = crossref_author_match(
+        if not crossref_author_match(
             scholar_authors,
             crossref_authors,
-        )
-
-        if not author_ok:
+        ):
             continue
 
         doi = normalize_doi(
@@ -887,7 +812,6 @@ def search_crossref(pub):
     if not candidates:
         return None
 
-    # Highest title similarity first.
     candidates.sort(
         key=lambda x: x[0],
         reverse=True,
@@ -929,7 +853,8 @@ def search_crossref(pub):
 
         print(
             "  Crossref match rejected "
-            f"(similarity < {CROSSREF_TITLE_THRESHOLD})",
+            f"(similarity < "
+            f"{CROSSREF_TITLE_THRESHOLD})",
             flush=True,
         )
 
@@ -939,31 +864,84 @@ def search_crossref(pub):
 
 
 # ============================================================
+# Crossref metadata
+# ============================================================
+
+def get_crossref_metadata(doi):
+
+    if not doi:
+        return None
+
+    url = (
+        f"{CROSSREF_URL}/"
+        f"{doi}"
+    )
+
+    try:
+
+        response = session.get(
+            url,
+            timeout=30,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        return data.get(
+            "message"
+        )
+
+    except Exception as exc:
+
+        print(
+            f"  Crossref metadata lookup failed: "
+            f"{exc}",
+            flush=True,
+        )
+
+        return None
+
+
+# ============================================================
+# Get title from Crossref
+# ============================================================
+
+def get_crossref_title(doi):
+
+    metadata = get_crossref_metadata(
+        doi
+    )
+
+    if not metadata:
+        return None
+
+    titles = metadata.get(
+        "title",
+        [],
+    )
+
+    if not titles:
+        return None
+
+    return titles[0]
+
+
+# ============================================================
 # Get DOI
 # ============================================================
 
 def get_doi(pub):
-    """
-    DOI lookup pipeline:
-
-        1. Google Scholar citation page
-        2. Crossref title/author/year matching
-    """
-
-    title = pub.get(
-        "title",
-        "",
-    )
-
-    # --------------------------------------------------------
-    # Method 1: Google Scholar
-    # --------------------------------------------------------
-
-    doi = None
 
     citation_id = pub.get(
         "citation_id"
     )
+
+    scholar_doi = None
+
+    # --------------------------------------------------------
+    # Google Scholar
+    # --------------------------------------------------------
 
     if citation_id:
 
@@ -973,48 +951,87 @@ def get_doi(pub):
 
         if data:
 
-            doi = search_doi_in_object(
-                data
+            scholar_doi = (
+                search_doi_in_object(
+                    data
+                )
             )
 
-    if doi:
+    # --------------------------------------------------------
+    # Crossref verification
+    #
+    # If Scholar gave a DOI, verify it through Crossref.
+    # This fixes cases such as:
+    #
+    # 10.1039/d6ta01797e/1267418
+    #
+    # where Scholar may return a publisher URL instead
+    # of the canonical DOI.
+    # --------------------------------------------------------
+
+    if scholar_doi:
 
         print(
-            f"  DOI from Google Scholar: {doi}",
+            f"  Scholar DOI candidate: "
+            f"{scholar_doi}",
             flush=True,
         )
 
-        return doi
+        metadata = get_crossref_metadata(
+            scholar_doi
+        )
+
+        if metadata:
+
+            canonical_doi = normalize_doi(
+                metadata.get("DOI")
+            )
+
+            if canonical_doi:
+
+                print(
+                    f"  Canonical DOI from Crossref: "
+                    f"{canonical_doi}",
+                    flush=True,
+                )
+
+                return canonical_doi
+
+        # ----------------------------------------------------
+        # If Crossref cannot resolve the Scholar candidate,
+        # use title-based Crossref search.
+        # ----------------------------------------------------
+
+        print(
+            "  Scholar DOI could not be verified.",
+            flush=True,
+        )
 
     # --------------------------------------------------------
-    # Method 2: Crossref
+    # Crossref title search
     # --------------------------------------------------------
-
-    print(
-        "  DOI not found in Google Scholar.",
-        flush=True,
-    )
 
     print(
         "  Searching Crossref...",
         flush=True,
     )
 
-    doi = search_crossref(
+    crossref_doi = search_crossref(
         pub
     )
 
-    if doi:
+    if crossref_doi:
 
         print(
-            f"  DOI from Crossref: {doi}",
+            f"  DOI from Crossref: "
+            f"{crossref_doi}",
             flush=True,
         )
 
-        return doi
+        return crossref_doi
 
     print(
-        f"  DOI NOT FOUND: {title}",
+        "  DOI NOT FOUND",
         flush=True,
     )
 
@@ -1022,21 +1039,99 @@ def get_doi(pub):
 
 
 # ============================================================
+# Get best display title
+# ============================================================
+
+def get_best_title(
+    pub,
+    doi,
+):
+    """
+    Prefer the Crossref title when available.
+
+    This allows malformed Google Scholar titles such as:
+
+        in (, Y; , Se, Te)
+
+    to be replaced automatically by the publisher metadata.
+
+    No paper-specific title correction is used.
+    """
+
+    if doi:
+
+        crossref_title = get_crossref_title(
+            doi
+        )
+
+        if crossref_title:
+
+            similarity = title_similarity(
+                pub.get(
+                    "title",
+                    "",
+                ),
+                crossref_title,
+            )
+
+            # Use Crossref title if Scholar's title is
+            # suspicious or significantly different.
+            #
+            # A completely different title is not accepted.
+            if similarity >= 0.60:
+
+                print(
+                    "  Using Crossref title:",
+                    crossref_title,
+                    flush=True,
+                )
+
+                return crossref_title
+
+            # If Scholar title contains obvious broken
+            # mathematical / chemical formatting, Crossref
+            # is still preferred.
+            scholar_title = pub.get(
+                "title",
+                "",
+            )
+
+            if any(
+                token in scholar_title
+                for token in [
+                    "(, Y;",
+                    " , Y;",
+                    " , Se",
+                    " , Te",
+                ]
+            ):
+
+                print(
+                    "  Using Crossref title:",
+                    crossref_title,
+                    flush=True,
+                )
+
+                return crossref_title
+
+    return pub.get(
+        "title",
+        "Unknown title",
+    )
+
+
+# ============================================================
 # Format publication
 # ============================================================
 
 def format_publication(pub):
-    """
-    Format publication as Markdown.
-
-    DOI is used when available.
-
-    Google Scholar is NEVER used as a fallback link.
-    """
 
     raw_title = pub.get(
-        "title",
-        "Unknown title",
+        "_display_title",
+        pub.get(
+            "title",
+            "Unknown title",
+        ),
     )
 
     title = clean_title(
@@ -1073,6 +1168,7 @@ def format_publication(pub):
 
     else:
 
+        # Never fallback to Google Scholar.
         title_text = (
             f"**{title}**"
         )
@@ -1109,9 +1205,6 @@ def update_section(
     end_marker,
     publications,
 ):
-    """
-    Replace content between README markers.
-    """
 
     pattern = (
         re.escape(start_marker)
@@ -1145,7 +1238,7 @@ def update_section(
 def main():
 
     # --------------------------------------------------------
-    # Fetch Google Scholar
+    # Google Scholar
     # --------------------------------------------------------
 
     print(
@@ -1161,7 +1254,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Filter conference publications
+    # Filter conferences
     # --------------------------------------------------------
 
     journal_publications = []
@@ -1181,7 +1274,8 @@ def main():
         if is_conference(pub):
 
             print(
-                f"  Excluding conference: {title}",
+                f"  Excluding conference: "
+                f"{title}",
                 flush=True,
             )
 
@@ -1198,7 +1292,7 @@ def main():
     )
 
     # --------------------------------------------------------
-    # Get DOI
+    # DOI + title
     # --------------------------------------------------------
 
     print(
@@ -1224,7 +1318,27 @@ def main():
 
         pub["_doi"] = doi
 
-        # Small delay to avoid unnecessary Crossref load.
+        # ----------------------------------------------------
+        # Get clean title from Crossref
+        # ----------------------------------------------------
+
+        if doi:
+
+            display_title = get_best_title(
+                pub,
+                doi,
+            )
+
+            pub["_display_title"] = (
+                display_title
+            )
+
+        else:
+
+            pub["_display_title"] = (
+                title
+            )
+
         time.sleep(
             CROSSREF_DELAY
         )
@@ -1250,7 +1364,7 @@ def main():
     )[:3]
 
     # --------------------------------------------------------
-    # Debug output
+    # Debug
     # --------------------------------------------------------
 
     print(
@@ -1262,8 +1376,8 @@ def main():
 
         print(
             pub.get(
-                "title",
-                "",
+                "_display_title",
+                pub.get("title", ""),
             ),
             flush=True,
         )
@@ -1283,8 +1397,8 @@ def main():
 
         print(
             pub.get(
-                "title",
-                "",
+                "_display_title",
+                pub.get("title", ""),
             ),
             flush=True,
         )
