@@ -36,7 +36,7 @@ Updating from Google Scholar...
 
 ## 🔗 Links
 
-* 🌐 [Personal Website]([YOUR_WEBSITE](https://sites.google.com/view/youhaojen))
+* 🌐 [Personal Website](https://sites.google.com/view/youhaojen)
 * 🎓 [Google Scholar](https://scholar.google.com/citations?user=46cZ1-wAAAAJ&hl=en)
 * 💻 [GitHub](https://github.com/Youhaojen)
 * 📧 Haojen.you[at]gmail.com
