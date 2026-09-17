@@ -738,6 +738,104 @@ def get_crossref_metadata(doi):
 
 
 # ============================================================
+# Crossref published-date extraction
+# ============================================================
+
+def get_crossref_year(item):
+
+    for field in (
+        "published",
+        "published-print",
+        "published-online",
+    ):
+
+        date_info = item.get(
+            field
+        )
+
+        if not date_info:
+            continue
+
+        parts = date_info.get(
+            "date-parts",
+            []
+        )
+
+        if parts and parts[0]:
+
+            return parts[0][0]
+
+    return None
+
+
+# ============================================================
+# Author cross-check
+#
+# Title similarity alone can be fooled by boilerplate academic
+# phrasing ("First-principles study of the thermoelectric
+# properties of X") that many unrelated papers share. Comparing
+# author surnames gives a much stronger signal that we matched
+# the *same* paper rather than a same-template one.
+# ============================================================
+
+def get_scholar_author_surnames(pub):
+
+    authors_field = (
+        pub.get("authors")
+        or ""
+    ).strip()
+
+    surnames = set()
+
+    for part in authors_field.split(","):
+
+        part = part.strip()
+
+        if not part:
+            continue
+
+        tokens = part.split()
+
+        if tokens:
+            surnames.add(
+                tokens[-1].strip(".").lower()
+            )
+
+    return surnames
+
+
+def get_crossref_author_surnames(item):
+
+    surnames = set()
+
+    for author in item.get("author", []) or []:
+
+        family = (
+            author.get("family")
+            or ""
+        ).strip()
+
+        if family:
+            surnames.add(family.lower())
+
+    return surnames
+
+
+def authors_conflict(scholar_surnames, crossref_surnames):
+    """
+    True only when we have names on BOTH sides and they share
+    no surname at all -- i.e. we're confident enough to reject.
+    Missing data on either side means "can't tell", not "reject".
+    """
+
+    return bool(
+        scholar_surnames
+        and crossref_surnames
+        and not (scholar_surnames & crossref_surnames)
+    )
+
+
+# ============================================================
 # Crossref title search
 # ============================================================
 
@@ -752,6 +850,10 @@ def search_crossref(pub):
         return None
 
     year = get_year(
+        pub
+    )
+
+    scholar_surnames = get_scholar_author_surnames(
         pub
     )
 
@@ -833,34 +935,38 @@ def search_crossref(pub):
             continue
 
         # ----------------------------------------------------
+        # Author cross-check
+        #
+        # A generic title template (common in this field) can
+        # clear the similarity threshold while being a totally
+        # different paper. Reject it if neither author list
+        # shares a single surname with the other.
+        # ----------------------------------------------------
+
+        crossref_surnames = get_crossref_author_surnames(
+            item
+        )
+
+        if authors_conflict(
+            scholar_surnames,
+            crossref_surnames,
+        ):
+
+            print(
+                f"  Crossref candidate rejected "
+                f"(no author overlap): "
+                f"{doi} (similarity={similarity:.3f})"
+            )
+
+            continue
+
+        # ----------------------------------------------------
         # Year
         # ----------------------------------------------------
 
-        crossref_year = None
-
-        for field in (
-            "published",
-            "published-print",
-            "published-online",
-        ):
-
-            date_info = item.get(
-                field
-            )
-
-            if not date_info:
-                continue
-
-            parts = date_info.get(
-                "date-parts",
-                []
-            )
-
-            if parts and parts[0]:
-
-                crossref_year = parts[0][0]
-
-                break
+        crossref_year = get_crossref_year(
+            item
+        )
 
         if (
             year
@@ -898,6 +1004,173 @@ def search_crossref(pub):
 
     print(
         "  Crossref: no reliable match"
+    )
+
+    return None
+
+
+# ============================================================
+# Crossref bibliographic search (fallback)
+#
+# SerpAPI's scrape of the Scholar title occasionally drops
+# characters -- most often italic/styled formula segments
+# (e.g. Unicode "mathematical italic" letters used for a
+# variable like M or Ch) -- so the title alone no longer
+# matches well. Crossref's bibliographic search takes a whole
+# citation string (title + authors + venue) rather than just
+# the title, so the surviving parts of a partially-garbled
+# title can still be enough to find the right record. Because
+# the title text itself may not be trustworthy here, a
+# confirmed author-surname overlap is treated as sufficient on
+# its own, even at a lower title similarity.
+# ============================================================
+
+def search_crossref_bibliographic(pub):
+
+    title = pub.get(
+        "title",
+        ""
+    ).strip()
+
+    if not title:
+        return None
+
+    authors_field = (
+        pub.get("authors")
+        or ""
+    ).strip()
+
+    publication = (
+        pub.get("publication")
+        or ""
+    ).strip()
+
+    bib_parts = [
+        part
+        for part in (title, authors_field, publication)
+        if part
+    ]
+
+    query_bib = clean_title(
+        " ".join(bib_parts)
+    )
+
+    params = {
+        "query.bibliographic": query_bib,
+        "rows": 5,
+        "select": (
+            "DOI,title,author,"
+            "published,published-print,"
+            "published-online"
+        ),
+    }
+
+    try:
+
+        response = session.get(
+            CROSSREF_URL,
+            params=params,
+            timeout=60,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+    except Exception as exc:
+
+        print(
+            f"  Crossref bibliographic search failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+        return None
+
+    items = (
+        data.get(
+            "message",
+            {}
+        ).get(
+            "items",
+            []
+        )
+    )
+
+    year = get_year(
+        pub
+    )
+
+    scholar_surnames = get_scholar_author_surnames(
+        pub
+    )
+
+    for item in items:
+
+        doi = normalize_doi(
+            item.get("DOI")
+        )
+
+        if not doi:
+            continue
+
+        titles = item.get(
+            "title",
+            []
+        )
+
+        crossref_title = titles[0] if titles else ""
+
+        similarity = (
+            title_similarity(title, crossref_title)
+            if crossref_title
+            else 0.0
+        )
+
+        crossref_surnames = get_crossref_author_surnames(
+            item
+        )
+
+        author_match = bool(
+            scholar_surnames
+            and crossref_surnames
+            and (scholar_surnames & crossref_surnames)
+        )
+
+        crossref_year = get_crossref_year(
+            item
+        )
+
+        year_ok = (
+            not year
+            or not crossref_year
+            or abs(year - crossref_year) <= 1
+        )
+
+        if not year_ok:
+            continue
+
+        if similarity >= CROSSREF_TITLE_THRESHOLD:
+
+            print(
+                f"  Crossref bibliographic match "
+                f"(title): {doi} "
+                f"(similarity={similarity:.3f})"
+            )
+
+            return doi
+
+        if author_match:
+
+            print(
+                f"  Crossref bibliographic match "
+                f"(author overlap, title similarity="
+                f"{similarity:.3f}): {doi}"
+            )
+
+            return doi
+
+    print(
+        "  Crossref bibliographic: no reliable match"
     )
 
     return None
@@ -1003,6 +1276,27 @@ def get_doi(pub):
             )
 
             return doi
+
+    # --------------------------------------------------------
+    # Crossref bibliographic fallback
+    #
+    # Catches cases where the Scholar title itself came back
+    # from SerpAPI partially garbled (see comment above the
+    # function), so a plain title search has little chance.
+    # --------------------------------------------------------
+
+    bib_doi = search_crossref_bibliographic(
+        pub
+    )
+
+    if bib_doi:
+
+        print(
+            f"  Crossref bibliographic DOI: "
+            f"{bib_doi}"
+        )
+
+        return bib_doi
 
     print(
         "  DOI not found."
