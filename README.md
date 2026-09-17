@@ -16,7 +16,7 @@ My research focuses on **computational materials science and machine learning**,
 ### Latest
 
 <!-- SCHOLAR-LATEST:START -->
-- **Lattice dynamics and thermoelectric transport in (, Y;, Se, Te): Role of anharmonic phonons and Ag-sublattice vibrations**
+- [Lattice dynamics and thermoelectric transport in M Ag C h2 (M = Sc, Y; C h = S, Se, Te): Role of anharmonic phonons and Ag-sublattice vibrations](https://doi.org/10.1103/rchb-m27r)
   *Physical Review B 114 (16), 165201, 2026, 2026 · 0 citations*
 - [The High-Value Thermoelectric Properties of Ruby-Silver Ores Ag₃XS₃ (X = As, Sb): A Combined Density Functional Theory and Machine Learning Approach](https://doi.org/10.1021/acsaem.6c01192)
   *ACS Applied Energy Materials, 2026, 2026 · 0 citations*
@@ -27,7 +27,7 @@ My research focuses on **computational materials science and machine learning**,
 ### Most Cited
 
 <!-- SCHOLAR-CITED:START -->
-- [First-Principles Study on Thermoelectric Properties of Penta-Sb2x (X=Si, Ge, Sn) Monolayers](https://doi.org/10.2139/ssrn.4259973)
+- [First-principles study on the thermoelectric properties of Sr₂Si and Sr₂Ge](https://doi.org/10.1016/j.mtphys.2023.101015)
   *Materials Today Physics 32, 101015, 2023, 2023 · 25 citations*
 - [Influence of different substrate materials on thermoelectric module with bulk legs](https://doi.org/10.1016/j.jpowsour.2019.227055)
   *Journal of Power Sources 438, 227055, 2019, 2019 · 20 citations*
