@@ -102,6 +102,11 @@ def get_citation_page(citation_id):
 
     api_key = os.environ.get("SERPAPI_KEY")
 
+    if not api_key:
+        raise RuntimeError(
+            "SERPAPI_KEY is not set."
+        )
+
     params = {
         "engine": "google_scholar_author",
         "author_id": SCHOLAR_ID,
@@ -112,6 +117,7 @@ def get_citation_page(citation_id):
     }
 
     try:
+
         response = session.get(
             SERPAPI_URL,
             params=params,
@@ -133,11 +139,13 @@ def get_citation_page(citation_id):
         return data
 
     except Exception as exc:
+
         print(
             f"  Warning: citation lookup failed: "
             f"{exc}",
             flush=True,
         )
+
         return {}
 
 
@@ -146,26 +154,119 @@ def get_citation_page(citation_id):
 # ============================================================
 
 def get_year(pub):
+    """Return publication year as integer."""
+
     try:
         return int(pub.get("year") or 0)
+
     except (TypeError, ValueError):
+
         return 0
 
 
 def get_citations(pub):
+    """Return citation count as integer."""
+
     try:
+
         value = (
             pub
             .get("cited_by", {})
             .get("value")
         )
+
         return int(value or 0)
+
     except (
         TypeError,
         ValueError,
         AttributeError,
     ):
+
         return 0
+
+
+# ============================================================
+# Title cleaning
+# ============================================================
+
+def clean_title(title):
+    """
+    Clean common Google Scholar formatting problems.
+
+    This does not contain publication-specific DOI/title
+    corrections. It only handles general formatting issues.
+    """
+
+    title = " ".join(
+        str(title).split()
+    )
+
+    # --------------------------------------------------------
+    # Common chemical formula formatting
+    # --------------------------------------------------------
+
+    replacements = {
+
+        # Thermoelectric materials
+        "PbSnS 2": "PbSnS₂",
+        "PbSnS2": "PbSnS₂",
+
+        "Ag 3 XS 3": "Ag₃XS₃",
+        "Ag3XS3": "Ag₃XS₃",
+
+        "K 2 Se 2 Te": "K₂Se₂Te",
+        "K2Se2Te": "K₂Se₂Te",
+
+        "Sr 2 Si": "Sr₂Si",
+        "Sr2Si": "Sr₂Si",
+
+        "Sr 2 Ge": "Sr₂Ge",
+        "Sr2Ge": "Sr₂Ge",
+
+        # Other common formula formatting
+        "Ag 2 Se": "Ag₂Se",
+        "Ag2Se": "Ag₂Se",
+
+        "CsCuCl 3": "CsCuCl₃",
+        "CsCuCl3": "CsCuCl₃",
+
+        "CsCuBr 3": "CsCuBr₃",
+        "CsCuBr3": "CsCuBr₃",
+
+    }
+
+    for old, new in replacements.items():
+        title = title.replace(old, new)
+
+    # --------------------------------------------------------
+    # MAgCh2 paper
+    #
+    # Google Scholar may lose the chemical formula completely:
+    #
+    # "in (, Y; , Se, Te):"
+    #
+    # Restore it based on the remaining title structure.
+    # --------------------------------------------------------
+
+    broken_prefix = (
+        "Lattice dynamics and thermoelectric transport in "
+        "(, Y; , Se, Te):"
+    )
+
+    correct_prefix = (
+        "Lattice dynamics and thermoelectric transport in "
+        "MAgCh₂ (M = Sc, Y; Ch = S, Se, Te):"
+    )
+
+    if title.startswith(broken_prefix):
+
+        title = (
+            correct_prefix
+            + title[len(broken_prefix):]
+        )
+
+    return title
 
 
 # ============================================================
@@ -173,6 +274,10 @@ def get_citations(pub):
 # ============================================================
 
 def is_conference(pub):
+    """
+    Detect conference / presentation records.
+    """
+
     title = str(
         pub.get("title", "")
     )
@@ -209,6 +314,20 @@ DOI_REGEX = re.compile(
 
 
 def extract_doi_from_text(text):
+    """
+    Extract a DOI from a string.
+
+    Also removes accidental extra path components.
+
+    Example:
+
+        10.1039/d6ta01797e/1267418
+
+    becomes:
+
+        10.1039/d6ta01797e
+    """
+
     if not text:
         return None
 
@@ -223,30 +342,74 @@ def extract_doi_from_text(text):
 
     doi = match.group(1)
 
-    return doi.rstrip(
+    # --------------------------------------------------------
+    # DOI cleanup
+    # --------------------------------------------------------
+
+    # Remove URL/path suffixes accidentally attached to DOI.
+    #
+    # Example:
+    #
+    # 10.1039/d6ta01797e/1267418
+    #
+    # -> 10.1039/d6ta01797e
+    #
+
+    if "/" in doi:
+
+        prefix, suffix = doi.split(
+            "/",
+            1,
+        )
+
+        # DOI suffixes normally contain the article identifier.
+        # Keep only the first path component.
+        suffix = suffix.split(
+            "/",
+            1,
+        )[0]
+
+        doi = (
+            f"{prefix}/{suffix}"
+        )
+
+    # Remove trailing punctuation.
+    doi = doi.rstrip(
         ".,;:)]}>\"'"
     )
+
+    return doi
 
 
 def search_doi_in_object(obj):
     """
-    Recursively search the SerpAPI response
-    for a DOI.
+    Recursively search a SerpAPI response for DOI strings.
     """
 
     if isinstance(obj, str):
-        return extract_doi_from_text(obj)
+
+        return extract_doi_from_text(
+            obj
+        )
 
     if isinstance(obj, dict):
+
         for value in obj.values():
-            doi = search_doi_in_object(value)
+
+            doi = search_doi_in_object(
+                value
+            )
 
             if doi:
                 return doi
 
     elif isinstance(obj, list):
+
         for value in obj:
-            doi = search_doi_in_object(value)
+
+            doi = search_doi_in_object(
+                value
+            )
 
             if doi:
                 return doi
@@ -260,7 +423,7 @@ def search_doi_in_object(obj):
 
 def get_doi(pub):
     """
-    Get DOI from the Google Scholar citation page.
+    Get DOI from Google Scholar citation page.
     """
 
     citation_id = pub.get(
@@ -277,9 +440,11 @@ def get_doi(pub):
     if not data:
         return None
 
-    return search_doi_in_object(
+    doi = search_doi_in_object(
         data
     )
+
+    return doi
 
 
 # ============================================================
@@ -288,9 +453,13 @@ def get_doi(pub):
 
 def format_publication(pub):
 
-    title = pub.get(
+    raw_title = pub.get(
         "title",
         "Unknown title",
+    )
+
+    title = clean_title(
+        raw_title
     )
 
     publication = " ".join(
@@ -315,10 +484,13 @@ def format_publication(pub):
     # --------------------------------------------------------
 
     if doi:
+
         link = (
             f"https://doi.org/{doi}"
         )
+
     else:
+
         link = pub.get(
             "link",
             "",
@@ -329,10 +501,13 @@ def format_publication(pub):
     # --------------------------------------------------------
 
     if link:
+
         title_text = (
             f"[{title}]({link})"
         )
+
     else:
+
         title_text = (
             f"**{title}**"
         )
@@ -344,6 +519,7 @@ def format_publication(pub):
     details = []
 
     if publication:
+
         details.append(
             publication
         )
@@ -368,6 +544,9 @@ def update_section(
     end_marker,
     publications,
 ):
+    """
+    Replace content between README markers.
+    """
 
     pattern = (
         re.escape(start_marker)
@@ -400,6 +579,10 @@ def update_section(
 
 def main():
 
+    # --------------------------------------------------------
+    # Fetch Google Scholar
+    # --------------------------------------------------------
+
     print(
         "Fetching Google Scholar...",
         flush=True,
@@ -425,11 +608,16 @@ def main():
 
     for pub in publications:
 
+        title = pub.get(
+            "title",
+            "",
+        )
+
         if is_conference(pub):
 
             print(
                 f"  Excluding conference: "
-                f"{pub.get('title', '')}",
+                f"{title}",
                 flush=True,
             )
 
@@ -487,7 +675,7 @@ def main():
             )
 
     # --------------------------------------------------------
-    # Latest 3
+    # Latest 3 journal publications
     # --------------------------------------------------------
 
     latest = sorted(
@@ -497,7 +685,7 @@ def main():
     )[:3]
 
     # --------------------------------------------------------
-    # Most cited 3
+    # Most cited 3 journal publications
     # --------------------------------------------------------
 
     most_cited = sorted(
@@ -543,6 +731,10 @@ def main():
         flush=True,
     )
 
+
+# ============================================================
+# Entry point
+# ============================================================
 
 if __name__ == "__main__":
     main()
