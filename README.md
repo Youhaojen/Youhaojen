@@ -27,7 +27,7 @@ My research focuses on **computational materials science and machine learning**,
 ### Most Cited
 
 <!-- SCHOLAR-CITED:START -->
-- **First-Principles Study on the Thermoelectric Properties of Sr₂Si and Sr₂Ge**
+- [First-Principles Study on the Thermoelectric Properties of Sr₂Si and Sr₂Ge](https://doi.org/10.1016/j.mtphys.2023.101015)
   *Materials Today Physics 32, 101015, 2023, 2023 · 25 citations*
 - [Influence of different substrate materials on thermoelectric module with bulk legs](https://doi.org/10.1016/j.jpowsour.2019.227055)
   *Journal of Power Sources 438, 227055, 2019, 2019 · 20 citations*
