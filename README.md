@@ -4,10 +4,10 @@ Research Assistant at the Institute of Physics, Academia Sinica.
 
 My research focuses on **computational materials science and machine learning**, with interests in:
 
-* ⚡ Thermoelectric materials
 * 🔬 Materials discovery
-* 🧪 Electronic & Phonon transport
-* 🔋 Superionic materials
+* 🤖 Developing machine learning architectures
+* ⚡ Electronic & Phonon transport
+* 🔋 Thermoelectric & Superionic materials
 
 ---
 
@@ -48,5 +48,5 @@ My research focuses on **computational materials science and machine learning**,
 * 📧 Haojen.you[at]gmail.com
 
 <p align="center">
-<i>Computational Materials Science · Machine Learning · Thermoelectrics</i>
+<i>Physics · Materials Science · Machine Learning</i>
 </p>
