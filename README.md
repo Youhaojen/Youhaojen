@@ -18,7 +18,7 @@ My research focuses on **computational materials science and machine learning**,
 <!-- SCHOLAR-LATEST:START -->
 - [Lattice dynamics and thermoelectric transport in M Ag C h2 (M = Sc, Y; C h = S, Se, Te): Role of anharmonic phonons and Ag-sublattice vibrations](https://doi.org/10.1103/rchb-m27r)
   *Physical Review B 114 (16), 165201, 2026, 2026 · 0 citations*
-- **The High-Value Thermoelectric Properties of Ruby-Silver Ores Ag₃XS₃ (X = As, Sb): A Combined Density Functional Theory and Machine Learning Approach**
+- [The High-Value Thermoelectric Properties of Ruby-Silver Ores Ag₃XS₃ (X = As, Sb): A Combined Density Functional Theory and Machine Learning Approach](https://doi.org/10.1021/acsaem.6c01192)
   *ACS Applied Energy Materials, 2026, 2026 · 0 citations*
 - [Achieving high thermoelectric performance in metal sulfide PbSnS₂ through strain-mediated lone-pair expression amplification and multi-band conduction](https://doi.org/10.1039/d6ta01797e)
   *Journal of Materials Chemistry A, 2026, 2026 · 0 citations*
